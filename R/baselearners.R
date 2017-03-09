@@ -1824,6 +1824,405 @@ bfpc <- function(x, s, index = NULL, df = 4,
 
 
 
+### hyper parameters for signal baselearner with eigenfunctions as bases, FPCO-based
+hyper_fpco <- function(mf, vary, df = 4, lambda = NULL,
+                       pve = 0.99, npc = NULL, npc.max = NULL, getEigen=TRUE,
+                       s=NULL, distType = "DTW", ...) {
+  list(df = df, lambda = lambda, pve = pve, npc = npc, npc.max = npc.max,
+       getEigen = getEigen, s = s, prediction = FALSE, distType = distType, ...)
+}
+
+
+### model.matrix for FPCo based functional base-learner
+X_fpco <- function(mf, vary, args) {
+  
+  stopifnot(is.data.frame(mf))  ## mf is matrix of X
+  xname <- names(mf)
+  X1 <- as.matrix(mf)
+  xind <- attr(mf[[1]], "signalIndex")
+  if(is.null(xind)) xind <- args$s # if the attribute is NULL use the s of the model fit
+  
+  if(ncol(X1)!=length(xind)) stop(xname, ": Dimension of signal matrix and its index do not match.")
+  
+  ## do FPCO on X1 
+  if(is.null(args$klX)){
+    decomppars <- list(distType = args$distType,
+                       pve = args$pve, npc = args$npc, npc.max = args$npc.max)
+    
+    # IS THERE ANY SMARTER WAY TO FIND DISTANCE ARGUMENTS
+    ellipse_index <- which((names(args) %in% c("df","lambda","pve","npc",
+                                               "npc.max","getEigen","s",
+                                               "prediction", "distType")) 
+                           == FALSE)
+    
+    decomppars <- c(decomppars, args[ellipse_index])
+    
+    decomppars$Y <- X1
+    
+    klX <- do.call(fpco.sc, decomppars)
+    
+    ## add the solution of the decomposition to args
+    args$klX <- klX
+    args$klX$xind <- xind
+    
+    ## only use part of the eigen-functions!
+    args$subset <- 1:min(ncol(klX$points), args$npc.max)
+    
+    ## points \xi_{ik}: rows i=1,..., N and columns k=1,...,K
+    ## are the design matrix
+    X <- klX$points[ , args$subset, drop = FALSE]
+    
+    ## scores can be computed as \xi_{ik}=\int X1cen_i(s) \phi_k(s) ds
+  }else{
+    klX <- args$klX
+    ## compute scores on new X1 observations
+    if(ncol(X1) == length(klX$mu) && all(args$s == xind)){
+      X <- klX$points[ , args$subset, drop = FALSE] ## place holder
+    }else{
+      stop("In bfpco the grid for the functional covariate has to be the same as in the model fit!")
+      ## <FIXME> is this linear interpolation of the basis functions correct?
+      #  approxEfunctions <- matrix(NA, nrow=length(xind), ncol=length(args$subset))
+      #  for(i in 1:ncol(klX$efunctions[ , args$subset, drop = FALSE])){
+      #     approxEfunctions[,i] <- approx(x=args$klX$xind, y=klX$efunctions[,i], xout=xind)$y
+      # }
+      #  approxMu <- approx(x=args$klX$xind, y=klX$mu, xout=xind)$y
+      # X <-(scale(X1, center=approxMu, scale=FALSE) %*% approxEfunctions)
+      ## <FIXME> use integration weights?
+      ##  X <- 1/args$a*(scale(X1, center=approxMu, scale=FALSE) %*% approxEfunctions)
+    }
+  }
+  
+  colnames(X) <- paste("PCo", 1:ncol(X), sep = "")
+  
+  
+  ### PENALTY MATRIX: DIAGNONAL MATRIX OF INVERSE EIGEN-VALUES
+  ### Penalty matrix: diagonal matrix of inverse eigen-values
+  ### implicit assumption: important eigen-functions of X process
+  ### are more important in shape of beta
+  ## K <- diag(1/klX$evalues[args$subset])
+  
+  ### use the identity matrix for penalization
+  ### all eigenfunctions are penalized with the same strength
+  ### PENALTY IS DONE BY TRUNCATING NUMBER OF PCs
+  K <- diag(rep(1, length=length(args$subset)))
+  
+  ### no penalty at all, as regularization is done by truncating the number of PCs used
+  ### gives bad estimates
+  # K <- matrix(0, ncol=length(args$subset), nrow=length(args$subset))
+  
+  return(list(X = X, K = K, args=args))
+}
+
+
+### multi-dimensional scaling for for fpco.sc (from refund package)
+cmdscale_lanczos <- function(d, k = 2, eig = TRUE, add = FALSE, x.ret = FALSE){
+  
+  if (anyNA(d))
+    stop("NA values not allowed in 'd'")
+  if (is.null(n <- attr(d, "Size"))) {
+    if(add) d <- as.matrix(d)
+    x <- as.matrix(d^2)
+    storage.mode(x) <- "double"
+    if ((n <- nrow(x)) != ncol(x))
+      stop("distances must be result of 'dist' or a square matrix")
+    rn <- rownames(x)
+  } else {
+    rn <- attr(d, "Labels")
+    x <- matrix(0, n, n) # must be double
+    if (add) d0 <- x
+    x[row(x) > col(x)] <- d^2
+    x <- x + t(x)
+    if (add) {
+      d0[row(x) > col(x)] <- d
+      d <- d0 + t(d0)
+    }
+  }
+  n <- as.integer(n)
+  
+  ## we need to handle nxn internally in dblcen
+  if(is.na(n) || n > 46340) stop("invalid value of 'n'")
+  if((k <- as.integer(k)) > n - 1 || k < 1)
+    stop("'k' must be in {1, 2, .. n - 1}")
+  
+  ## NB: this alters argument x, which is OK as it is re-assigned.
+  #x <- .Call(stats::C_DoubleCentre, x)
+  x <- scale(t(scale(t(x), scale=FALSE)),scale=FALSE)
+  
+  if(add) { ## solve the additive constant problem
+    ## it is c* = largest eigenvalue of 2 x 2 (n x n) block matrix Z:
+    i2 <- n + (i <- 1L:n)
+    Z <- matrix(0, 2L*n, 2L*n)
+    Z[cbind(i2,i)] <- -1
+    Z[ i, i2] <- -x
+    #    Z[i2, i2] <- .Call(stats::C_DoubleCentre, 2*d)
+    Z[i2, i2] <- scale(t(scale(t(2*d), scale=FALSE)),scale=FALSE)
+    
+    ###### this is where Dave modified things
+    add.c <- max(slanczos(Z, k=1, kl=1)$values)
+    #e <- eigen(Z, symmetric = FALSE, only.values = TRUE)$values
+    #add.c <- max(Re(e))
+    ## and construct a new x[,] matrix:
+    x <- matrix(double(n*n), n, n)
+    non.diag <- row(d) != col(d)
+    x[non.diag] <- (d[non.diag] + add.c)^2
+    #x <- .Call(stats::C_DoubleCentre, x)
+    x <- scale(t(scale(t(x), scale=FALSE)),scale=FALSE)
+  }
+  
+  ###### this is where Dave modified things
+  e <- slanczos(-x/2, k=k)
+  ev <- e$values#[seq_len(k)]
+  evec <- e$vectors#[, seq_len(k), drop = FALSE]
+  k1 <- sum(ev > 0)
+  
+  if(k1 < k) {
+    warning(gettextf("only %d of the first %d eigenvalues are > 0", k1, k),
+            domain = NA)
+    evec <- evec[, ev > 0, drop = FALSE]
+    ev <- ev[ev > 0]
+  }
+  npc = ifelse(k1 <k, k1, k)
+  
+  points <- evec * rep(sqrt(ev), each=n)
+  dimnames(points) <- list(rn, NULL)
+  if (eig || x.ret || add) {
+    evalues <- e$values # Cox & Cox have sum up to n-1, though
+    list(points = points, 
+         evalues = if(eig) ev, 
+         efunctions = if(eig) evec,
+         npc = npc,
+         x = if(x.ret) x,
+         ac = if(add) add.c else 0,
+         GOF = sum(ev)/c(sum(abs(evalues)), sum(pmax(evalues, 0))) )
+  } else points
+}
+
+
+### FPCO by smooth centered dissimilarity matrix
+fpco.sc <- function(Y = NULL, Y.pred = NULL, center = TRUE, random.int = FALSE ,nbasis = 10,
+                   argvals = NULL, distType = "DTW", npc = NULL, npc.max = NULL, pve = 0.99, ...) {
+  
+  ## longer computation time due to dist function
+  
+  if (is.null(Y.pred))
+    Y.pred = Y
+  D = NCOL(Y)
+  I = NROW(Y)
+  I.pred = NROW(Y.pred)
+  
+  if (is.null(argvals))
+    argvals = seq(0, 1, length = D)
+  
+  d.vec = rep(argvals, each = I)
+  id = rep(1:I, rep(D, I))
+  
+  if (center) {
+    if (random.int) {
+      ri_data <- data.frame(y = as.vector(Y), d.vec = d.vec, id = factor(id))
+      gam0 = gamm4(y ~ s(d.vec, k = nbasis), random = ~(1 | id), data = ri_data)$gam
+      rm(ri_data)
+    } else gam0 = gam(as.vector(Y) ~ s(d.vec, k = nbasis))
+    mu = predict(gam0, newdata = data.frame(d.vec = argvals))
+    Y.tilde = Y - matrix(mu, I, D, byrow = TRUE)
+  } else {
+    Y.tilde = Y
+    mu = rep(0, D)
+  }
+  
+  # dissimilarity matrix
+  Dist <- dist(Y, method = distType, ...) 
+  Dist <- as.matrix(Dist)
+  
+  # cmdsclale_lanczos function from refund package
+  if(is.null(npc.max)) {
+    ll <- cmdscale_lanczos(d = Dist, eig = TRUE, add = FALSE, x.ret = FALSE)
+  }else{ 
+    ll <- cmdscale_lanczos(d = Dist, k = npc.max, eig = TRUE, add = FALSE, x.ret = FALSE)}
+  
+  points <- ll$points
+  evalues <- ll$evalues
+  efunctions <- ll$efunctions
+  npc <- ll$npc
+  
+  #   compute in primitive way  
+  #   Matrix_B = t(Y) %*% Y
+  #   C <- diag(1, nrow = I, ncol = I) - 1/I * matrix(1, nrow = I, ncol = I)
+  #   B <- -0.5* C %*% Dist %*% C
+  #   
+  #   # eigen values 
+  #   evalues <- eigen(B, symmetric = TRUE, only.values = TRUE)$values
+  #   
+  #   # number of principal coordinates
+  #   npc <- ifelse(is.null(npc), min(which(cumsum(evalues)/sum(evalues) > pve)), npc)
+  #   
+  #   # truncated eigen values 
+  #   evalues <- eigen(B, symmetric = TRUE, only.values = TRUE)$values[1:npc]
+  #   evalues <- replace(evalues, which(evalues <= 0), 0)
+  #   
+  #   #truncated eigen functions
+  #   efunctions <- matrix(eigen(B, symmetric = TRUE)$vectors[, seq(len = npc)], nrow = D, ncol = npc)  ## is the dimension right?
+  #   
+  #   # points
+  #   points <- efunctions * rep(sqrt(evalues), each = D) 
+  #   colnames(points) <- paste("pco_", 1:ncol(points), sep = "")
+  
+  # set return item names
+  ret.objects = c( "Y", "efunctions", "evalues", "npc", "points", "mu")
+  #ret.objects = c("Yhat", "Y", "scores", "mu", "efunctions", "evalues", "npc",
+  #              "argvals")
+  #if (var) {
+  #  ret.objects = c(ret.objects, "sigma2", "diag.var", "VarMats")
+  #if (simul)
+  #  ret.objects = c(ret.objects, "crit.val")
+  #}
+  
+  # get return item values
+  ret = lapply(1:length(ret.objects), function(u) get(ret.objects[u]))
+  names(ret) = ret.objects
+  class(ret) = "fpco"
+  
+  # return
+  return(ret)
+}
+
+
+################################################################################
+# FPCO base-learner 
+# import DTW
+# @importFrom proxy dist
+# @importFrom mgcv gam
+# @exmaples
+# ## functional principal coordinates base learner 
+# \dontrun{library(FDboost)}
+# 
+# data(fuelSubset)
+#
+# x = fuelSubset$UVVIS
+# s = fuelSubset$uvvis.lambda
+# 
+# bs1 <- bfpco(x, s, distType = "DTW",window.type="sakoechiba", window.size=5)
+# 
+# bs1$model.frame()
+# bs1$get_call()
+# bs1$get_data()
+# bs1$get_index()
+# bs1$get_vary()
+# bs1$get_names()
+# bs1$set_names()
+# bs1$dpp(weights = rep(1, nrow(x))) # dpp does not work correctly
+
+# ## functional principal component base lerner
+# bs2 <- bfpc(x, s)
+# 
+# bs2$model.frame()
+# bs2$get_call()
+# bs2$get_data()
+# bs2$get_index()
+# bs2$get_vary()
+# bs2$get_names()
+# bs2$set_names()
+# bs2$dpp(weights = rep(1,nrow(x))) 
+
+bfpco <- function(x, s, index = NULL, df = 4, lambda = NULL, pve = 0.99,
+                  npc = NULL, npc.max = 15, getEigen = TRUE, distType = "DTW",
+                  ...){
+  
+  if (!is.null(lambda)) df <- NULL
+  
+  cll <- match.call()
+  cll[[1]] <- as.name("bfpco")
+  
+  if(!mboost_intern(x, fun = "isMATRIX") ) stop("signal has to be a matrix")
+  
+  varnames <- all.vars(cll)
+  print(paste("internal variable: varnames", varnames))
+  
+  # Reshape mfL so that it is the dataframe of the signal with the index as attribute
+  # is signal necessary?
+  xname <- varnames[1]
+  indname <- varnames[2]
+  if(is.null(colnames(x))) colnames(x) <- paste(xname, 1:ncol(x), sep="_")
+  attr(x, "signalIndex") <- s
+  attr(x, "xname") <- xname
+  attr(x, "indname") <- indname
+  
+  mf <- data.frame("z"=I(x))
+  names(mf) <- xname
+  
+  vary <- ""
+  
+  ## <FIXME> for a FPCo based base-learner the X can contain missings!
+  # CC <- all(Complete.cases(mf))
+  CC <- all(mboost_intern(mf, fun = "Complete.cases"))
+  if (!CC)
+    warning("base-learner contains missing values;\n",
+            "missing values are excluded per base-learner, ",
+            "i.e., base-learners may depend on different",
+            " numbers of observations.")
+  
+  #index <- NULL
+  
+  ## call X_fpco in oder to compute parameter settings, e.g.
+  ## the basis functions, based on FPCA
+  temp <- X_fpco(mf, vary,
+                 args = hyper_fpco(mf, vary, df = df, lambda = lambda,
+                                   pve = pve, npc = npc, npc.max = npc.max,
+                                   s = s, distType = distType, ...))
+  
+  # temp is a list of score, penalty matrix, and args
+  ## save the FPCA in args
+  ## str(temp$args)
+  
+  ## return closure object: utilize lexical closures to encapsulate both data and methods.
+  ret <- list(model.frame = function()
+    if (is.null(index)) return(mf) else{
+      mftemp <- mf
+      mf <- mftemp[index,,drop = FALSE] # this is necessary to pass the attributes
+      attributes(mftemp[,xname])
+      attr(mf[,xname], "signalIndex") <- attr(mftemp[,xname], "signalIndex")
+      attr(mf[,xname], "xname") <- attr(mftemp[,xname], "xname")
+      attr(mf[,xname], "indname") <- attr(mftemp[,xname], "indname")
+      return(mf)
+    } ,
+    get_call = function(){
+      cll <- deparse(cll, width.cutoff=500L)
+      if (length(cll) > 1)
+        cll <- paste(cll, collapse="")
+      cll
+    },
+    get_data = function() mf,
+    get_index = function() index,
+    get_vary = function() vary,
+    get_names = function(){
+      attr(xname, "indname") <- indname
+      xname
+    }, #colnames(mf),
+    set_names = function(value) {
+      #if(length(value) != length(colnames(mf)))
+      if(length(value) != names(mf[1]))
+        stop(sQuote("value"), " must have same length as ",
+             sQuote("names(mf[1])"))
+      for (i in 1:length(value)){
+        cll[[i+1]] <<- as.name(value[i])
+      }
+      attr(mf, "names") <<- value
+    })
+  class(ret) <- "blg"
+  
+  # dpp is a list of function or variables
+  # fit(y)
+  # hatvalues()
+  # df()
+  # predict(bm, newdata = NULL) : predicted value of y (when newdata=NULL) or of newdata
+  # Xnames : the name of pcos
+  ret$dpp <- mboost_intern(ret, Xfun = X_fpco, args = temp$args, fun = "bl_lin")
+  
+  
+  rm(temp)
+  
+  return(ret)
+}
+
 
 
 #######################################################################################
