@@ -2025,16 +2025,15 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, center = TRUE, random.int = FALSE ,
     } else gam0 = gam(as.vector(Y) ~ s(d.vec, k = nbasis))
     mu = predict(gam0, newdata = data.frame(d.vec = argvals))
     Y.tilde = Y - matrix(mu, I, D, byrow = TRUE)
-  } else {
-    Y.tilde = Y
+  } else { 
+    # here is where I modify mu
+    # Y.tilde = Y
+    Y.tilde = Y - matrix(colMeans(Y, na.rm = TRUE), I, D, byrow = TRUE)
     mu = rep(0, D)
   }
   
-  ## cerntering of Y
-  
-  
   # dissimilarity matrix
-  Dist <- dist(Y, method = distType, ...) 
+  Dist <- dist(Y.tilde, method = distType, ...) 
   Dist <- as.matrix(Dist)
   
   # cmdsclale_lanczos function from refund package
@@ -2050,29 +2049,29 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, center = TRUE, random.int = FALSE ,
 #   npc <- ll$npc
   
   # compute decomposition in an original way 
-    Matrix_B = t(Y) %*% Y
-    C <- diag(1, nrow = I, ncol = I) - 1/I * matrix(1, nrow = I, ncol = I)
-    B <- -0.5* C %*% Dist %*% C
-    
-    # eigen values 
-    evalues <- eigen(B, symmetric = TRUE, only.values = TRUE)$values
-    
-    # number of principal coordinates
-    npc <- ifelse(is.null(npc), min(which(cumsum(evalues)/sum(evalues) > pve)), npc)
-    
-    # truncated eigen values 
-    evalues <- eigen(B, symmetric = TRUE, only.values = TRUE)$values[1:npc]
-    evalues <- replace(evalues, which(evalues <= 0), 0)
-    
-    #truncated eigen functions
-    efunctions <- matrix(eigen(B, symmetric = TRUE)$vectors[, seq(len = npc)], nrow = I, ncol = npc)  ## is the dimension right?
-    
-    # points
-    points <- efunctions %*% diag(sqrt(evalues[1:npc]))
-    colnames(points) <- paste("pco_", 1:ncol(points), sep = "")
+  Matrix_B = t(Y.tilde) %*% Y.tilde
+  C <- diag(1, nrow = I, ncol = I) - 1/I * matrix(1, nrow = I, ncol = I)
+  B <- -0.5* C %*% Dist %*% C
+  
+  # eigen values 
+  evalues <- eigen(B, symmetric = TRUE, only.values = TRUE)$values
+  
+  # number of principal coordinates
+  npc <- ifelse(is.null(npc), min(which(cumsum(evalues)/sum(evalues) > pve)), npc)
+  
+  # truncated eigen values 
+  evalues <- eigen(B, symmetric = TRUE, only.values = TRUE)$values[1:npc]
+  evalues <- replace(evalues, which(evalues <= 0), 0)
+  
+  #truncated eigen functions
+  efunctions <- matrix(eigen(B, symmetric = TRUE)$vectors[, seq(len = npc)], nrow = I, ncol = npc)  ## is the dimension right?
+  
+  # points
+  points <- efunctions %*% diag(sqrt(evalues[1:npc]))
+  colnames(points) <- paste("pco_", 1:ncol(points), sep = "")
   
   # set return item names
-  ret.objects = c( "Y", "efunctions", "evalues", "npc", "points", "mu")
+  ret.objects = c( "Y", "efunctions", "evalues", "npc", "points", "mu", "argvals")
   #ret.objects = c("Yhat", "Y", "scores", "mu", "efunctions", "evalues", "npc",
   #              "argvals")
   #if (var) {
@@ -2096,6 +2095,7 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, center = TRUE, random.int = FALSE ,
 # import DTW
 # @importFrom proxy dist
 # @importFrom mgcv gam
+# @importFrom gamm4 gamm4
 # @exmaples
 # ## functional principal coordinates base learner 
 # \dontrun{library(FDboost)}
@@ -2115,6 +2115,7 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, center = TRUE, random.int = FALSE ,
 # bs1$get_names()
 # bs1$dpp(weights = rep(1, nrow(x))) 
 # 
+# # look into dpp 
 # temp = bs1$dpp(weights = rep(1, nrow(x))) 
 # # PCO coeffcient
 # temp$fit(y = fuelSubset$heatan)$model     
