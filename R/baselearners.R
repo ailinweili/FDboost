@@ -1917,6 +1917,7 @@ X_fpco <- function(mf, vary, args) {
 ### multi-dimensional scaling for for fpco.sc (from refund package)
 cmdscale_lanczos <- function(d, k = 2, eig = TRUE, add = FALSE, x.ret = FALSE){
   
+  # this function however does not allow choose pco by pve
   if (anyNA(d))
     stop("NA values not allowed in 'd'")
   if (is.null(n <- attr(d, "Size"))) {
@@ -2000,7 +2001,7 @@ cmdscale_lanczos <- function(d, k = 2, eig = TRUE, add = FALSE, x.ret = FALSE){
 
 ### FPCO by smooth centered dissimilarity matrix
 fpco.sc <- function(Y = NULL, Y.pred = NULL, center = TRUE, random.int = FALSE ,nbasis = 10,
-                   argvals = NULL, distType = "DTW", npc = NULL, npc.max = NULL, pve = 0.99, ...) {
+                   argvals = NULL, distType = NULL, npc = NULL, npc.max = NULL, pve = 0.99, ...) {
   
   ## longer computation time due to dist function
   
@@ -2029,42 +2030,46 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, center = TRUE, random.int = FALSE ,
     mu = rep(0, D)
   }
   
+  ## cerntering of Y
+  
+  
   # dissimilarity matrix
   Dist <- dist(Y, method = distType, ...) 
   Dist <- as.matrix(Dist)
   
   # cmdsclale_lanczos function from refund package
-  if(is.null(npc.max)) {
-    ll <- cmdscale_lanczos(d = Dist, eig = TRUE, add = FALSE, x.ret = FALSE)
-  }else{ 
-    ll <- cmdscale_lanczos(d = Dist, k = npc.max, eig = TRUE, add = FALSE, x.ret = FALSE)}
+    ## cmdsclale_lanczos does not allow to select pco by pve
+#   if(is.null(npc.max)) {
+#     ll <- cmdscale_lanczos(d = Dist, eig = TRUE, add = FALSE, x.ret = FALSE)
+#   }else{ 
+#     ll <- cmdscale_lanczos(d = Dist, k = npc.max, eig = TRUE, add = FALSE, x.ret = FALSE)}
+#   
+#   points <- ll$points
+#   evalues <- ll$evalues
+#   efunctions <- ll$efunctions
+#   npc <- ll$npc
   
-  points <- ll$points
-  evalues <- ll$evalues
-  efunctions <- ll$efunctions
-  npc <- ll$npc
-  
-  #   compute in primitive way  
-  #   Matrix_B = t(Y) %*% Y
-  #   C <- diag(1, nrow = I, ncol = I) - 1/I * matrix(1, nrow = I, ncol = I)
-  #   B <- -0.5* C %*% Dist %*% C
-  #   
-  #   # eigen values 
-  #   evalues <- eigen(B, symmetric = TRUE, only.values = TRUE)$values
-  #   
-  #   # number of principal coordinates
-  #   npc <- ifelse(is.null(npc), min(which(cumsum(evalues)/sum(evalues) > pve)), npc)
-  #   
-  #   # truncated eigen values 
-  #   evalues <- eigen(B, symmetric = TRUE, only.values = TRUE)$values[1:npc]
-  #   evalues <- replace(evalues, which(evalues <= 0), 0)
-  #   
-  #   #truncated eigen functions
-  #   efunctions <- matrix(eigen(B, symmetric = TRUE)$vectors[, seq(len = npc)], nrow = D, ncol = npc)  ## is the dimension right?
-  #   
-  #   # points
-  #   points <- efunctions * rep(sqrt(evalues), each = D) 
-  #   colnames(points) <- paste("pco_", 1:ncol(points), sep = "")
+  # compute decomposition in an original way 
+    Matrix_B = t(Y) %*% Y
+    C <- diag(1, nrow = I, ncol = I) - 1/I * matrix(1, nrow = I, ncol = I)
+    B <- -0.5* C %*% Dist %*% C
+    
+    # eigen values 
+    evalues <- eigen(B, symmetric = TRUE, only.values = TRUE)$values
+    
+    # number of principal coordinates
+    npc <- ifelse(is.null(npc), min(which(cumsum(evalues)/sum(evalues) > pve)), npc)
+    
+    # truncated eigen values 
+    evalues <- eigen(B, symmetric = TRUE, only.values = TRUE)$values[1:npc]
+    evalues <- replace(evalues, which(evalues <= 0), 0)
+    
+    #truncated eigen functions
+    efunctions <- matrix(eigen(B, symmetric = TRUE)$vectors[, seq(len = npc)], nrow = I, ncol = npc)  ## is the dimension right?
+    
+    # points
+    points <- efunctions %*% diag(sqrt(evalues[1:npc]))
+    colnames(points) <- paste("pco_", 1:ncol(points), sep = "")
   
   # set return item names
   ret.objects = c( "Y", "efunctions", "evalues", "npc", "points", "mu")
@@ -2096,11 +2101,11 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, center = TRUE, random.int = FALSE ,
 # \dontrun{library(FDboost)}
 # 
 # data(fuelSubset)
-#
+# 
 # x = fuelSubset$UVVIS
 # s = fuelSubset$uvvis.lambda
 # 
-# bs1 <- bfpco(x, s, distType = "DTW",window.type="sakoechiba", window.size=5)
+# bs1 <- bfpco(x, s, distType = "DTW", window.type="sakoechiba", window.size=5)
 # 
 # bs1$model.frame()
 # bs1$get_call()
@@ -2108,9 +2113,22 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, center = TRUE, random.int = FALSE ,
 # bs1$get_index()
 # bs1$get_vary()
 # bs1$get_names()
-# bs1$set_names()
-# bs1$dpp(weights = rep(1, nrow(x))) # dpp does not work correctly
-
+# bs1$dpp(weights = rep(1, nrow(x))) 
+# 
+# temp = bs1$dpp(weights = rep(1, nrow(x))) 
+# # PCO coeffcient
+# temp$fit(y = fuelSubset$heatan)$model     
+# # fitted value
+# temp$fit(y = fuelSubset$heatan)$fitted()  
+# # Hat matrix
+# temp$hatvalues()  
+# # does not work
+# temp$predict(bm = temp$fit(y = fuelSubset$heatan))    
+# # degree of freedom
+# temp$df()
+# # the names of PCOs
+# temp$Xnames
+# 
 # ## functional principal component base lerner
 # bs2 <- bfpc(x, s)
 # 
@@ -2122,6 +2140,15 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, center = TRUE, random.int = FALSE ,
 # bs2$get_names()
 # bs2$set_names()
 # bs2$dpp(weights = rep(1,nrow(x))) 
+# 
+# a2 = bs2$dpp(weights = rep(1,nrow(x))) 
+# 
+# a2$fit(y = x)
+# a2$hatvalues()
+# a2$predict(bm = a$fit(y = x)) # this does not work
+# a2$df()
+# a2$Xnames
+
 
 bfpco <- function(x, s, index = NULL, df = 4, lambda = NULL, pve = 0.99,
                   npc = NULL, npc.max = 15, getEigen = TRUE, distType = "DTW",
@@ -2135,7 +2162,6 @@ bfpco <- function(x, s, index = NULL, df = 4, lambda = NULL, pve = 0.99,
   if(!mboost_intern(x, fun = "isMATRIX") ) stop("signal has to be a matrix")
   
   varnames <- all.vars(cll)
-  print(paste("internal variable: varnames", varnames))
   
   # Reshape mfL so that it is the dataframe of the signal with the index as attribute
   # is signal necessary?
@@ -2210,9 +2236,9 @@ bfpco <- function(x, s, index = NULL, df = 4, lambda = NULL, pve = 0.99,
   class(ret) <- "blg"
   
   # dpp is a list of function or variables
-  # fit(y)
-  # hatvalues()
-  # df()
+  # fit(y)  : fitted model
+  # hatvalues()  : predicted value
+  # df()  : given df or df computed from lambda
   # predict(bm, newdata = NULL) : predicted value of y (when newdata=NULL) or of newdata
   # Xnames : the name of pcos
   ret$dpp <- mboost_intern(ret, Xfun = X_fpco, args = temp$args, fun = "bl_lin")
