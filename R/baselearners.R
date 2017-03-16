@@ -1914,10 +1914,11 @@ X_fpco <- function(mf, vary, args) {
 }
 
 
-### multi-dimensional scaling for for fpco.sc (from refund package)
-cmdscale_lanczos <- function(d, k = 2, eig = TRUE, add = FALSE, x.ret = FALSE){
+### multi-dimensional scaling  (modify cmdscale_lanczos from refund package)
+# insert npc, pve, npc.max parameter, enable select pco by pve.
+cmdscale_lanczos_new <- function(d, npc = NULL, pve = 0.99, npc.max = 15, 
+                                 eig = FALSE, add = FALSE, x.ret = FALSE){
   
-  # this function however does not allow choose pco by pve
   if (anyNA(d))
     stop("NA values not allowed in 'd'")
   if (is.null(n <- attr(d, "Size"))) {
@@ -1942,8 +1943,10 @@ cmdscale_lanczos <- function(d, k = 2, eig = TRUE, add = FALSE, x.ret = FALSE){
   
   ## we need to handle nxn internally in dblcen
   if(is.na(n) || n > 46340) stop("invalid value of 'n'")
-  if((k <- as.integer(k)) > n - 1 || k < 1)
-    stop("'k' must be in {1, 2, .. n - 1}")
+  if(!is.null(npc)){
+    if((npc <- as.integer(npc)) > n - 1 || npc < 1)
+      stop("'npc' must be in {1, 2, .. n - 1}")
+  }
   
   ## NB: this alters argument x, which is OK as it is re-assigned.
   #x <- .Call(stats::C_DoubleCentre, x)
@@ -1971,32 +1974,72 @@ cmdscale_lanczos <- function(d, k = 2, eig = TRUE, add = FALSE, x.ret = FALSE){
   }
   
   ###### this is where Dave modified things
-  e <- slanczos(-x/2, k=k)
-  ev <- e$values#[seq_len(k)]
-  evec <- e$vectors#[, seq_len(k), drop = FALSE]
-  k1 <- sum(ev > 0)
+#   e <- slanczos(-x/2, k=k)
+#   ev <- e$values#[seq_len(k)]
+#   evec <- e$vectors#[, seq_len(k), drop = FALSE]
+#   k1 <- sum(ev > 0)
+#   
+#   if(k1 < k) {
+#     warning(gettextf("only %d of the first %d eigenvalues are > 0", k1, k),
+#             domain = NA)
+#     evec <- evec[, ev > 0, drop = FALSE]
+#     ev <- ev[ev > 0]
+#   }
   
-  if(k1 < k) {
-    warning(gettextf("only %d of the first %d eigenvalues are > 0", k1, k),
+  
+  ###### how to insert pve? use k as the dimension of x, use npc.max and pve, npc
+  ###### to select pco
+  # default k1 of slanczos is negative, the order of the evalues associates to k, 
+  # so get the full pco and select by magnitude
+  e <- slanczos(-x/2, k = nrow(x))  
+  ev <- e$values
+  evec <- e$vectors
+  
+  ###### here is where Weili inserted npc.max and pve
+  # rank the ev by magnitude
+  ord <- order(abs(ev), decreasing = TRUE)
+  ev <- ev[ord]
+  evec <- evec[,ord]
+  
+  # compute npc 
+  npc <- ifelse(is.null(npc), min(which(cumsum(abs(ev))/sum(abs(ev)) > pve)), npc)
+  if(npc > npc.max)  
+      npc <- npc.max
+  
+  # get first npc evalues and efunctions
+  ev <- ev[1:npc]  
+  evec <- as.matrix(evec[,1:npc])
+  
+  # give warning if negative evalue exists
+  npc1 <- sum(ev > 0)
+  if(npc1 < npc) {
+    warning(gettextf("only %d of the first %d eigenvalues are > 0", npc1, npc),
             domain = NA)
-    evec <- evec[, ev > 0, drop = FALSE]
-    ev <- ev[ev > 0]
-  }
-  npc = ifelse(k1 <k, k1, k)
+  } 
   
+  # remove negative evalues
+  evec <- evec[, ev > 0, drop = FALSE]
+  ev <- ev[ev > 0]
+ 
+  # compute points
   points <- evec * rep(sqrt(ev), each=n)
   dimnames(points) <- list(rn, NULL)
+  
+  # return 
   if (eig || x.ret || add) {
-    evalues <- e$values # Cox & Cox have sum up to n-1, though
-    list(points = points, 
-         evalues = if(eig) ev, 
-         efunctions = if(eig) evec,
-         npc = npc,
-         x = if(x.ret) x,
+    evalus <- e$values # Cox & Cox have sum up to n-1, though
+    list(points = points, eig = if(eig) evalus, x = if(x.ret) x,
          ac = if(add) add.c else 0,
-         GOF = sum(ev)/c(sum(abs(evalues)), sum(pmax(evalues, 0))) )
+         GOF = sum(ev)/c(sum(abs(evalus)), sum(pmax(evalus, 0))) )
   } else points
 }
+
+# equal <- vector("logical", length = 14)
+# for(i in 2:15) {
+# res1 <- cmdscale_lanczos_new(d, npc = i, pve = 0.99, npc.max = 15)
+# res2 <- cmdscale_lanczos(d, k = i)
+# equal[i] <- all.equal(res1, res2) # TRUE
+# }
 
 
 ### FPCO by smooth centered dissimilarity matrix
@@ -2016,7 +2059,8 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, center = TRUE, random.int = FALSE ,
   
   d.vec = rep(argvals, each = I)
   id = rep(1:I, rep(D, I))
-  
+
+  # this part is used for fpca but maybe not for fpco
   if (center) {
     if (random.int) {
       ri_data <- data.frame(y = as.vector(Y), d.vec = d.vec, id = factor(id))
@@ -2026,9 +2070,9 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, center = TRUE, random.int = FALSE ,
     mu = predict(gam0, newdata = data.frame(d.vec = argvals))
     Y.tilde = Y - matrix(mu, I, D, byrow = TRUE)
   } else { 
-    # here is where I modify mu
-    # Y.tilde = Y
-    Y.tilde = Y - matrix(colMeans(Y, na.rm = TRUE), I, D, byrow = TRUE)
+    # do not center
+     Y.tilde = Y
+    #Y.tilde = Y - matrix(colMeans(Y, na.rm = TRUE), I, D, byrow = TRUE)
     mu = rep(0, D)
   }
   
@@ -2036,40 +2080,38 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, center = TRUE, random.int = FALSE ,
   Dist <- dist(Y.tilde, method = distType, ...) 
   Dist <- as.matrix(Dist)
   
-  # cmdsclale_lanczos function from refund package
-    ## cmdsclale_lanczos does not allow to select pco by pve
-#   if(is.null(npc.max)) {
-#     ll <- cmdscale_lanczos(d = Dist, eig = TRUE, add = FALSE, x.ret = FALSE)
-#   }else{ 
-#     ll <- cmdscale_lanczos(d = Dist, k = npc.max, eig = TRUE, add = FALSE, x.ret = FALSE)}
+  # modify cmdsclale_lanczos function from refund package
+  # because cmdscale_lanczos does not allow to select pco by pve
+  ll <- cmdscale_lanczos_new(d = Dist, npc = npc, npc.max = npc.max, pve = pve, 
+                               eig = TRUE, add = FALSE, x.ret = FALSE)
+  
+  points <- ll$points
+  evalues <- ll$evalues
+  efunctions <- ll$efunctions
+  npc <- ll$npc
+  
+#   # compute decomposition in an original way 
+#   Matrix_B = t(Y.tilde) %*% Y.tilde
+#   C <- diag(1, nrow = I, ncol = I) - 1/I * matrix(1, nrow = I, ncol = I)
+#   B <- -0.5* C %*% Dist %*% C
 #   
-#   points <- ll$points
-#   evalues <- ll$evalues
-#   efunctions <- ll$efunctions
-#   npc <- ll$npc
-  
-  # compute decomposition in an original way 
-  Matrix_B = t(Y.tilde) %*% Y.tilde
-  C <- diag(1, nrow = I, ncol = I) - 1/I * matrix(1, nrow = I, ncol = I)
-  B <- -0.5* C %*% Dist %*% C
-  
-  # eigen values 
-  evalues <- eigen(B, symmetric = TRUE, only.values = TRUE)$values
-  
-  # number of principal coordinates
-  npc <- ifelse(is.null(npc), min(which(cumsum(evalues)/sum(evalues) > pve)), npc)
-  
-  # truncated eigen values 
-  evalues <- eigen(B, symmetric = TRUE, only.values = TRUE)$values[1:npc]
-  evalues <- replace(evalues, which(evalues <= 0), 0)
-  
-  #truncated eigen functions
-  efunctions <- matrix(eigen(B, symmetric = TRUE)$vectors[, seq(len = npc)], nrow = I, ncol = npc)  ## is the dimension right?
-  
-  # points
-  points <- efunctions %*% diag(sqrt(evalues[1:npc]))
-  colnames(points) <- paste("pco_", 1:ncol(points), sep = "")
-  
+#   # eigen values 
+#   evalues <- eigen(B, symmetric = TRUE, only.values = TRUE)$values
+#   
+#   # number of principal coordinates
+#   npc <- ifelse(is.null(npc), min(which(cumsum(evalues)/sum(evalues) > pve)), npc)
+#   
+#   # truncated eigen values 
+#   evalues <- eigen(B, symmetric = TRUE, only.values = TRUE)$values[1:npc]
+#   evalues <- replace(evalues, which(evalues <= 0), 0)
+#   
+#   #truncated eigen functions
+#   efunctions <- matrix(eigen(B, symmetric = TRUE)$vectors[, seq(len = npc)], nrow = I, ncol = npc)  ## is the dimension right?
+#   
+#   # points
+#   points <- efunctions %*% diag(sqrt(evalues[1:npc]))
+#   colnames(points) <- paste("pco_", 1:ncol(points), sep = "")
+#   
   # set return item names
   ret.objects = c( "Y", "efunctions", "evalues", "npc", "points", "mu", "argvals")
   #ret.objects = c("Yhat", "Y", "scores", "mu", "efunctions", "evalues", "npc",
@@ -2114,7 +2156,7 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, center = TRUE, random.int = FALSE ,
 # bs1$get_vary()
 # bs1$get_names()
 # bs1$dpp(weights = rep(1, nrow(x))) 
-# 
+# # 
 # # look into dpp 
 # temp = bs1$dpp(weights = rep(1, nrow(x))) 
 # # PCO coeffcient
@@ -2124,12 +2166,12 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, center = TRUE, random.int = FALSE ,
 # # Hat matrix
 # temp$hatvalues()  
 # # does not work
-# temp$predict(bm = temp$fit(y = fuelSubset$heatan))    
+# temp$predict(bm = list(temp$fit(y = fuelSubset$heatan)))    
 # # degree of freedom
 # temp$df()
 # # the names of PCOs
 # temp$Xnames
-# 
+
 # ## functional principal component base lerner
 # bs2 <- bfpc(x, s)
 # 
