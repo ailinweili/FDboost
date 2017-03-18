@@ -1834,6 +1834,17 @@ hyper_fpco <- function(mf, vary, df = 4, lambda = NULL,
 
 
 ### model.matrix for FPCo based functional base-learner
+# mf = data.frame(fuelSubset$UVVIS)
+# vary = ""
+# args = hyper_fpco(mf, vary, npc = 5, npc.max = 15, s = fuelSubset$uvvis.lambda)
+# 
+# # compute PCOs
+# res1 <- X_fpco(mf, vary, args)
+# # compute PCOs for new points (original data) 
+# res2 <- X_fpco(mf, vary, res1$args)
+# 
+# new PCOs should be the same as the old one
+# all.equal(res$args$klX$points, res2$args$klX$points)
 X_fpco <- function(mf, vary, args) {
   
   stopifnot(is.data.frame(mf))  ## mf is matrix of X
@@ -1877,7 +1888,22 @@ X_fpco <- function(mf, vary, args) {
     klX <- args$klX
     ## compute scores on new X1 observations
     if(ncol(X1) == length(klX$mu) && all(args$s == xind)){
-      X <- klX$points[ , args$subset, drop = FALSE] ## place holder
+      # coordinate for the new data inserted into principal coordinate space
+      # where to get the new dist???
+      # refer pco_predict_preprocess of refund package to add additive constant
+      Dist <- klX$Dist # n*(nnew)
+      non.diag <- row(Dist) != col(Dist) # 
+      Dist[non.diag] <- (Dist[non.diag] + klX$ac)
+      
+      B <- klX$B
+      d <- diag(B) - (Dist^2)  # d = d_(i)^2 - d_(i,new)^2 = b_(ii) - d_(i,new)^2
+
+      # get inverse eigen matrix
+      ev <- klX$evalues[1:ncol(klX$points)]
+      lambda.inverse <- as.matrix(diag(1/ev))
+      
+      # compute new PCOs by equation(10) in Gower(1968)
+      X <- t(1/2*(lambda.inverse %*% t(klX$points) %*% d))      
     }else{
       stop("In bfpco the grid for the functional covariate has to be the same as in the model fit!")
       ## <FIXME> is this linear interpolation of the basis functions correct?
@@ -1892,7 +1918,7 @@ X_fpco <- function(mf, vary, args) {
     }
   }
   
-  colnames(X) <- paste("PCo", 1:ncol(X), sep = "")
+  colnames(X) <- paste("Xdummy", 1:ncol(X), sep = "")
   
   
   ### PENALTY MATRIX: DIAGNONAL MATRIX OF INVERSE EIGEN-VALUES
@@ -1910,6 +1936,8 @@ X_fpco <- function(mf, vary, args) {
   ### gives bad estimates
   # K <- matrix(0, ncol=length(args$subset), nrow=length(args$subset))
   
+  # X is the pco points, K is the penalty matrix, 
+  # args expand from args paramter and contain mainly pco analysis results
   return(list(X = X, K = K, args=args))
 }
 
@@ -2027,10 +2055,10 @@ cmdscale_lanczos_new <- function(d, npc = NULL, pve = 0.99, npc.max = 15,
   
   # return 
   if (eig || x.ret || add) {
-    evalus <- e$values # Cox & Cox have sum up to n-1, though
-    list(points = points, eig = if(eig) evalus, x = if(x.ret) x,
-         ac = if(add) add.c else 0,
-         GOF = sum(ev)/c(sum(abs(evalus)), sum(pmax(evalus, 0))) )
+    evalues <- ev # Cox & Cox have sum up to n-1, though
+    list(points = points, evalues = if(eig) ev, efunctions = evec, x = if(x.ret) x,
+         ac = if(add) add.c else 0, npc = npc,
+         GOF = sum(ev)/c(sum(abs(evalues)), sum(pmax(evalues, 0))) )
   } else points
 }
 
@@ -2083,12 +2111,14 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, center = TRUE, random.int = FALSE ,
   # modify cmdsclale_lanczos function from refund package
   # because cmdscale_lanczos does not allow to select pco by pve
   ll <- cmdscale_lanczos_new(d = Dist, npc = npc, npc.max = npc.max, pve = pve, 
-                               eig = TRUE, add = FALSE, x.ret = FALSE)
+                               eig = TRUE, add = TRUE, x.ret = TRUE)
   
   points <- ll$points
   evalues <- ll$evalues
   efunctions <- ll$efunctions
   npc <- ll$npc
+  B <- -1/2*(ll$x)
+  ac <- ll$ac
   
 #   # compute decomposition in an original way 
 #   Matrix_B = t(Y.tilde) %*% Y.tilde
@@ -2113,7 +2143,8 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, center = TRUE, random.int = FALSE ,
 #   colnames(points) <- paste("pco_", 1:ncol(points), sep = "")
 #   
   # set return item names
-  ret.objects = c( "Y", "efunctions", "evalues", "npc", "points", "mu", "argvals")
+  ret.objects = c( "Y", "efunctions", "evalues", "npc", "points", "mu", "argvals",
+                   "B", "Dist", "ac")
   #ret.objects = c("Yhat", "Y", "scores", "mu", "efunctions", "evalues", "npc",
   #              "argvals")
   #if (var) {
