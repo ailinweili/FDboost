@@ -2238,8 +2238,7 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, center = TRUE, random.int = FALSE ,
 # a2$df()
 # a2$Xnames
 #
-# comparison of bfpco and pco based on a toy example 
-# library(refund)
+#### Comparison of bfpco based FDboost, bfpc based FDboost and pco based gam 
 # library(mgcv)
 # require(dtw)
 # 
@@ -2283,7 +2282,9 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, center = TRUE, random.int = FALSE ,
 # 
 # m3 <- FDboost(y.toy ~ bfpc(X.toy, s = 1:101), timeformula = NULL, data = dd)  
 # 
+# # model fitted values
 # print(cbind(y.toy = y.toy, pred_pco = m1$fitted.values, pred_bfpco = m2$fitted(), pred_bfpc = m3$fitted()))
+#
 # # resudual sum of squares
 # c(sum(m1$residuals^2), sum(m2$resid()^2), sum(m3$resid()^2))
 
