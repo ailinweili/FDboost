@@ -98,7 +98,7 @@ print.FDboost <- function(x, ...) {
 #' @method predict FDboost
 #' @export
 # predict function: wrapper for predict.mboost()
-predict.FDboost <- function(object, newdata = NULL, which = NULL, toFDboost = TRUE, ...){
+predict.FDboost2 <- function(object, newdata = NULL, which = NULL, toFDboost = TRUE, ...){
   
   stopifnot(any(class(object)=="FDboost")) 
   # print("Prediction FDboost") 
@@ -236,7 +236,8 @@ predict.FDboost <- function(object, newdata = NULL, which = NULL, toFDboost = TR
     ### In the case of bsignal(), bfpc(), bconcurrent() and bhist() it is necessary 
     # to add the index of the signal-matrix as attribute
     posBsignal <- c(grep("bsignal(", names(object$baselearner), fixed = TRUE), 
-                    grep("bfpc(", names(object$baselearner), fixed = TRUE))
+                    grep("bfpc(", names(object$baselearner), fixed = TRUE),
+                    grep("bfpco(", names(object$baselearner), fixed = TRUE))
     posBconc <- grep("bconcurrent(", names(object$baselearner), fixed = TRUE)
     posBhist <- grep("bhist(", names(object$baselearner), fixed = TRUE)
     whichHelp <- which
@@ -253,7 +254,7 @@ predict.FDboost <- function(object, newdata = NULL, which = NULL, toFDboost = TR
         ## if two ore more base-learners are connected by %X%, find the functional variable 
         if(grepl("%X", names(object$baselearner)[i])){
           form <- strsplit(object$baselearner[[i]]$get_call(), "%X")[[1]]
-          findFun <- grepl("bhist", form) | grepl("bconcurrent", form) | grepl("bsignal", form) | grepl("bfpc", form)
+          findFun <- grepl("bhist", form) | grepl("bconcurrent", form) | grepl("bsignal", form) | grepl("bfpc", form) | grepl("bfpco", form)
           form <- form[findFun]
           if(sum(findFun)!=1){stop("Can only predict effect of one functional effect in %X% or %Xc%.")}
           xname <- object$baselearner[[i]]$get_names()[findFun][1]

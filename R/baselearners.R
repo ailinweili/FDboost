@@ -1834,18 +1834,28 @@ hyper_fpco <- function(mf, vary, df = 4, lambda = NULL,
 
 
 ### model.matrix for FPCo based functional base-learner
-# test computation of new PCOs 
+## test computation of new PCOs 
 # mf = data.frame(fuelSubset$UVVIS)
 # vary = ""
 # args = hyper_fpco(mf, vary, npc = 5, npc.max = 15, s = fuelSubset$uvvis.lambda)
 # 
 # # compute PCOs
 # res1 <- X_fpco(mf, vary, args)
-# # compute PCOs for new points (original data) 
+# # compute PCOs for new points ()
 # res2 <- X_fpco(mf, vary, res1$args)
 # 
-# new PCOs should be the same as the old one
-# all.equal(res$args$klX$points, res2$args$klX$points)
+# # new PCOs should be the same(in terms of absolute value) as the old one
+# all.equal(abs(res1$args$klX$points), abs(res2$args$klX$points))
+# 
+# 
+# ## compute new PCOs
+# # compute PCOs
+# res3 <- X_fpco(mf, vary, args)
+# # compute PCOs for new data points
+# newdata = mf[1:50,] + matrix(rnorm(50*134,0,1), nrow = 50, ncol = 134)
+# res4 <- X_fpco(mf, vary, res3$args)
+
+
 X_fpco <- function(mf, vary, args) {
   
   stopifnot(is.data.frame(mf))  ## mf is matrix of X
@@ -1887,12 +1897,15 @@ X_fpco <- function(mf, vary, args) {
     ## scores can be computed as \xi_{ik}=\int X1cen_i(s) \phi_k(s) ds
   }else{
     klX <- args$klX
+    X <- args$klX$points
     ## compute scores on new X1 observations
     if(ncol(X1) == length(klX$mu) && all(args$s == xind)){
       # coordinate for the new data inserted into principal coordinate space
-      # where to get the new dist???
       # refer pco_predict_preprocess of refund package to add additive constant
-      Dist <- klX$Dist # n*(nnew)
+      Dist <- as.matrix(dist(rbind(klX$Y, X1), distType = args$distType))   # (n+nnew)*(n+nnew) how to put the ellipse term?
+      N1 <- nrow(klX$Y)
+      N2 <- nrow(X1)
+      Dist <- Dist[1:N1, N1+(1:N2)] # n*nnew
       non.diag <- row(Dist) != col(Dist) # 
       Dist[non.diag] <- (Dist[non.diag] + klX$ac)
       
@@ -1905,8 +1918,8 @@ X_fpco <- function(mf, vary, args) {
       
       # compute new PCOs by equation(10) in Gower(1968)
       X <- t(1/2*(lambda.inverse %*% t(klX$points) %*% d))      
-    }else{
-      stop("In bfpco the grid for the functional covariate has to be the same as in the model fit!")
+      }else{
+        stop("In bfpco the grid for the functional covariate has to be the same as in the model fit!")
       ## <FIXME> is this linear interpolation of the basis functions correct?
       #  approxEfunctions <- matrix(NA, nrow=length(xind), ncol=length(args$subset))
       #  for(i in 1:ncol(klX$efunctions[ , args$subset, drop = FALSE])){
@@ -1916,7 +1929,7 @@ X_fpco <- function(mf, vary, args) {
       # X <-(scale(X1, center=approxMu, scale=FALSE) %*% approxEfunctions)
       ## <FIXME> use integration weights?
       ##  X <- 1/args$a*(scale(X1, center=approxMu, scale=FALSE) %*% approxEfunctions)
-    }
+      }
   }
   
   colnames(X) <- paste("Xdummy", 1:ncol(X), sep = "")
@@ -1942,27 +1955,30 @@ X_fpco <- function(mf, vary, args) {
   return(list(X = X, K = K, args=args))
 }
 
-
 ### multi-dimensional scaling  (modify cmdscale_lanczos from refund package)
 # insert npc, pve, npc.max parameter, enable select pco by pve.
 #
 #### comparison of cmdscale_lanczos and cmdscale_lanczos_new
 # library(FDboost)
 # library(dtw)
+# library(mgcv)
 # 
 # data(fuelSubset)
 # x = fuelSubset$UVVIS
 # d = dist(x, method = "dtw")
-# equal <- vector("logical", length = 14)
 # 
-# for(i in 2:15) {
+# i = 5
 # res1 <- cmdscale_lanczos_new(d, npc = i, pve = 0.99, npc.max = 15, eig = TRUE)
 # res2 <- cmdscale_lanczos(d, k = i, eig = TRUE)
-# equal[i - 1] <- all.equal(res1, res2) # TRUE
-# }
+# all.equal(abs(res1$points),abs(res2$points))
+# all.equal(abs(res1$evalues),abs(res2$eig[1:length(res1$evalues)]))
+# all.equal(res1$x, res2$x)
+# all.equal(res1$ac, res2$ac)
 
 cmdscale_lanczos_new <- function(d, npc = NULL, pve = 0.99, npc.max = 15, 
                                  eig = FALSE, add = FALSE, x.ret = FALSE){
+  ## to do 
+  # remove npc > npc.max
   
   if (anyNA(d))
     stop("NA values not allowed in 'd'")
@@ -2086,7 +2102,7 @@ cmdscale_lanczos_new <- function(d, npc = NULL, pve = 0.99, npc.max = 15,
 
 
 ### FPCO by smooth centered dissimilarity matrix
-fpco.sc <- function(Y = NULL, Y.pred = NULL, center = TRUE, random.int = FALSE ,nbasis = 10,
+fpco.sc <- function(Y = NULL, Y.pred = NULL, center = TRUE, random.int = FALSE, nbasis = 10,
                    argvals = NULL, distType = NULL, npc = NULL, npc.max = NULL, pve = 0.99, ...) {
   
   ## longer computation time due to dist function
@@ -2159,7 +2175,7 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, center = TRUE, random.int = FALSE ,
 #   
   # set return item names
   ret.objects = c( "Y", "efunctions", "evalues", "npc", "points", "mu", "argvals",
-                   "B", "Dist", "ac")
+                   "B", "ac")
   #ret.objects = c("Yhat", "Y", "scores", "mu", "efunctions", "evalues", "npc",
   #              "argvals")
   #if (var) {
@@ -2188,12 +2204,15 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, center = TRUE, random.int = FALSE ,
 # ## functional principal coordinates base learner 
 # \dontrun{library(FDboost)}
 # 
+# library(FDboost)
+# library(mgcv)
+# library(dtw)
 # data(fuelSubset)
 # 
 # x = fuelSubset$UVVIS
 # s = fuelSubset$uvvis.lambda
 # 
-# bs1 <- bfpco(x, s, distType = "DTW", window.type="sakoechiba", window.size=5)
+# bs1 <- bfpco(x, s, distType = "DTW", window.type="sakoechiba", window.size=5) # class blg
 # 
 # bs1$model.frame() # 129*134
 # bs1$get_call() # 
@@ -2213,32 +2232,17 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, center = TRUE, random.int = FALSE ,
 # temp$hatvalues()   #129*129
 # # prediction 
 # temp$predict(bm = list(temp$fit(y = fuelSubset$heatan)))  #129*1
+# #newdata = vector("list", length = length(names(bs1)))
+# #names(newdata) = names(bs1)
+# #newdata[["get_data"]] = x[1:50,]
+# #temp$predict(bm = list(temp$fit(y = fuelSubset$heatan)), newdata = newdata)
 # # degree of freedom
 # temp$df()
 # # the names of PCOs
 # temp$Xnames
-
-# ## functional principal component base lerner
-# bs2 <- bfpc(x, s)
 # 
-# bs2$model.frame()
-# bs2$get_call()
-# bs2$get_data()
-# bs2$get_index()
-# bs2$get_vary()
-# bs2$get_names()
-# bs2$set_names()
-# bs2$dpp(weights = rep(1,nrow(x))) 
 # 
-# a2 = bs2$dpp(weights = rep(1,nrow(x))) 
-# 
-# a2$fit(y = x)
-# a2$hatvalues()
-# a2$predict(bm = a$fit(y = x)) # this does not work
-# a2$df()
-# a2$Xnames
-#
-#### Comparison of bfpco based FDboost, bfpc based FDboost and pco based gam 
+# #### Comparison of bfpco based FDboost, bfpc based FDboost and pco based gam 
 # library(mgcv)
 # require(dtw)
 # 
@@ -2251,6 +2255,7 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, center = TRUE, random.int = FALSE ,
 #   Xnl[i, (tt[i]+5):(tt[i]+9)] <- 1
 # }
 # X.toy <- Xnl + matrix(rnorm(30*101, ,0.05), 30)
+# colnames(X.toy) <- paste("X", 1:101, sep = "")
 # y.toy <- tt + rnorm(30, 0.05)
 # y.rainbow <- rainbow(30, end=0.9)[(y.toy-min(y.toy))/
 #                                     diff(range(y.toy))*29+1]
@@ -2271,23 +2276,26 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, center = TRUE, random.int = FALSE ,
 # D.dtw <- dist(X.toy, method="dtw", window.type="sakoechiba", window.size=5)
 # 
 # ## model data
-# dd <- list(y.toy = y.toy, X.toy = X.toy)
+# dd <- list(y.toy = y.toy, X.toy = X.toy, s = 1:101)
 # 
 # ## fit a model use pco(m1) and bfpco(m2)
 # m1 <- gam(y.toy ~ s(dummy, bs="pco", k=15, xt=list(D=D.dtw)), method="REML")
 # 
-# m2 <- FDboost(y.toy ~ bfpco(X.toy, s = 1:101, distType = "dtw", npc = 15,
+# m2 <- FDboost(y.toy ~ bfpco(X.toy, s = s, distType = "dtw", npc = 15,
 #                             window.type="sakoechiba", window.size=5), 
-#               timeformula = ~ bols(1), data = dd)
+#               timeformula = ~ bols(1), data = dd, control = boost_control(mstop = 1000))
 # 
-# m3 <- FDboost(y.toy ~ bfpc(X.toy, s = 1:101), timeformula = NULL, data = dd)  
+# m3 <- FDboost(y.toy ~ bfpc(X.toy, s = s), timeformula = NULL, data = dd)  
 # 
 # # model fitted values
 # print(cbind(y.toy = y.toy, pred_pco = m1$fitted.values, pred_bfpco = m2$fitted(), pred_bfpc = m3$fitted()))
-#
+# 
 # # resudual sum of squares
 # c(sum(m1$residuals^2), sum(m2$resid()^2), sum(m3$resid()^2))
-
+# 
+# # prediction on new data
+# newdd = list(X.toy =  Xnl + matrix(rnorm(30*101, ,0.05), 30), s = 1:101)
+# pred_y = predict.FDboost2(m2, newdata = newdd)
 
 bfpco <- function(x, s, index = NULL, df = 4, lambda = NULL, pve = 0.99,
                   npc = NULL, npc.max = 15, getEigen = TRUE, distType = "DTW",
