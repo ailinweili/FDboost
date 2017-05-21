@@ -98,7 +98,7 @@ print.FDboost <- function(x, ...) {
 #' @method predict FDboost
 #' @export
 # predict function: wrapper for predict.mboost()
-predict.FDboost2 <- function(object, newdata = NULL, which = NULL, toFDboost = TRUE, ...){
+predict.FDboost <- function(object, newdata = NULL, which = NULL, toFDboost = TRUE, ...){
   
   stopifnot(any(class(object)=="FDboost")) 
   # print("Prediction FDboost") 
@@ -953,7 +953,7 @@ coef.FDboost <- function(object, raw = FALSE, which = NULL,
         
         
         ## add dummy signal to data for bsignal()
-        if(grepl("bsignal", trm$get_call()) | grepl("bfpc", trm$get_call()) ){
+        if(grepl("bsignal", trm$get_call()) | grepl("bfpc", trm$get_call()) | grepl("bfpco", trm$get_call())){
           
           position_signal <- which(sapply(trm$model.frame(), 
                                           function(x) !is.null(attr(x, "signalIndex")) ))
@@ -962,6 +962,7 @@ coef.FDboost <- function(object, raw = FALSE, which = NULL,
                                                          integrationWeights(diag(ng), d[[position_signal]] ))
         }
         ## <FIXME> is this above dummy-matrix correct for bfpc?
+        ## <FIXME> is this above dummy-matrix correct for bfpco?
 
         ## add dummy signal to data for bhist()
         ## standardisation weights depending on t must be multiplied to the final \beta(s,t)

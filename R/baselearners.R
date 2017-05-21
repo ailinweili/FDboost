@@ -1826,8 +1826,8 @@ bfpc <- function(x, s, index = NULL, df = 4,
 
 ### hyper parameters for signal baselearner with eigenfunctions as bases, FPCO-based
 hyper_fpco <- function(mf, vary, df = 4, lambda = NULL,
-                       pve = 0.99, npc = NULL, npc.max = NULL, getEigen=TRUE,
-                       s=NULL, distType = "DTW", ...) {
+                       pve = 0.99, npc = NULL, npc.max = 15, getEigen=TRUE,
+                       s=NULL, distType = "Euclidean", ...) {
   list(df = df, lambda = lambda, pve = pve, npc = npc, npc.max = npc.max,
        getEigen = getEigen, s = s, prediction = FALSE, distType = distType, ...)
 }
@@ -1848,22 +1848,38 @@ hyper_fpco <- function(mf, vary, df = 4, lambda = NULL,
 # all.equal(abs(res1$args$klX$points), abs(res2$args$klX$points))
 # 
 # 
-# ## compute new PCOs
+# ## compute PCOs for new data with identical signal index
 # # compute PCOs
 # res3 <- X_fpco(mf, vary, args)
 # # compute PCOs for new data points
 # newdata = mf[1:50,] + matrix(rnorm(50*134,0,1), nrow = 50, ncol = 134)
 # res4 <- X_fpco(mf, vary, res3$args)
-
+# 
+# 
+# ## compute new PCOs with different signal index
+# # generat new data by take the first 100 rows of mf and the rowmeans of every 3 columns
+# newdata = data.frame(matrix(NA, ncol = 40, nrow = 100))
+# for( i in 1:40 ) 
+#  newdata[,i] = rowMeans(mf[100, (3*i):(3*i+2)])
+# newindex = vector()
+# for(i in 1:40) 
+#  newindex[i] = mean(fuelSubset$uvvis.lambda[(3*i):(3*i+2)])
+# attr(newdata[[1]], "signalIndex") <- newindex 
+# <Fix me > why use first term of a dataframe
+# res5 <- X_fpco(mf = newdata, vary, res3$args)
+# newpcos <- res5$X
 
 X_fpco <- function(mf, vary, args) {
   
   stopifnot(is.data.frame(mf))  ## mf is matrix of X
   xname <- names(mf)
   X1 <- as.matrix(mf)
-  xind <- attr(mf[[1]], "signalIndex")
+  xind <- attr(mf[[1]], "signalIndex") ## why [[1]] term? mf is a matrix
   if(is.null(xind)) xind <- args$s # if the attribute is NULL use the s of the model fit
   
+  
+  #if(!is.null(args$klX) && ncol(X1)!=length(xind) && is.null(attr(mf[[1]], "signalIndex")) ) 
+  #  stop("if new data has different length of index, the 'signalIndex' attribution of 'mf' must be explicit given!")
   if(ncol(X1)!=length(xind)) stop(xname, ": Dimension of signal matrix and its index do not match.")
   
   ## do FPCO on X1 
@@ -1919,14 +1935,36 @@ X_fpco <- function(mf, vary, args) {
       # compute new PCOs by equation(10) in Gower(1968)
       X <- t(1/2*(lambda.inverse %*% t(klX$points) %*% d))      
       }else{
-        stop("In bfpco the grid for the functional covariate has to be the same as in the model fit!")
-      ## <FIXME> is this linear interpolation of the basis functions correct?
-      #  approxEfunctions <- matrix(NA, nrow=length(xind), ncol=length(args$subset))
-      #  for(i in 1:ncol(klX$efunctions[ , args$subset, drop = FALSE])){
-      #     approxEfunctions[,i] <- approx(x=args$klX$xind, y=klX$efunctions[,i], xout=xind)$y
-      # }
-      #  approxMu <- approx(x=args$klX$xind, y=klX$mu, xout=xind)$y
-      # X <-(scale(X1, center=approxMu, scale=FALSE) %*% approxEfunctions)
+        #  stop("In bfpco the grid for the functional covariate has to be the same as in the model fit!")
+        ## <FIXME> is this linear interpolation of the basis functions correct?
+        #  linear interpolation of model data, fit the model data into new signal index 
+        approxY <- matrix(NA, nrow = nrow(args$klX$Y), ncol = length(xind))
+         for (i in 1:nrow(args$klX$Y))    
+           approxY[i, ] <- approx(x = args$klX$xind, y = klX$Y[i,], xout = xind)$y
+         
+        Dist <- as.matrix(dist(rbind(approxY, X1), distType = args$distType))
+        N1 <- nrow(approxY)
+        N2 <- nrow(X1)
+        Dist <- Dist[1:N1, N1+(1:N2)] # n*nnew
+        non.diag <- row(Dist) != col(Dist) # 
+        Dist[non.diag] <- (Dist[non.diag] + klX$ac) # is the ac appropriate when grided? is ac only distance related?
+         
+        B <- klX$B
+        d <- diag(B) - (Dist^2)  # d = d_(i)^2 - d_(i,new)^2 = b_(ii) - d_(i,new)^2
+         
+        # get inverse eigen matrix
+        ev <- klX$evalues[1:ncol(klX$points)]
+        lambda.inverse <- as.matrix(diag(1/ev))
+       
+        # compute new PCOs by equation(10) in Gower(1968)
+        X <- t(1/2*(lambda.inverse %*% t(klX$points) %*% d))  
+        
+#         approxEfunctions <- matrix(NA, nrow=length(xind), ncol=length(args$subset))
+#         for(i in 1:ncol(klX$efunctions[ , args$subset, drop = FALSE])){
+#            approxEfunctions[,i] <- approx(x=args$klX$xind, y=klX$efunctions[,i], xout=xind)$y
+#        }
+#         approxMu <- approx(x=args$klX$xind, y=klX$mu, xout=xind)$y
+#         X <-(scale(X1, center=approxMu, scale=FALSE) %*% approxEfunctions)
       ## <FIXME> use integration weights?
       ##  X <- 1/args$a*(scale(X1, center=approxMu, scale=FALSE) %*% approxEfunctions)
       }
@@ -2242,7 +2280,7 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, center = TRUE, random.int = FALSE, 
 # temp$Xnames
 # 
 # 
-# #### Comparison of bfpco based FDboost, bfpc based FDboost and pco based gam 
+# ### Comparison of bfpco based FDboost, bfpc based FDboost and pco based gam 
 # library(mgcv)
 # require(dtw)
 # 
@@ -2295,7 +2333,11 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, center = TRUE, random.int = FALSE, 
 # 
 # # prediction on new data
 # newdd = list(X.toy =  Xnl + matrix(rnorm(30*101, ,0.05), 30), s = 1:101)
-# pred_y = predict.FDboost2(m2, newdata = newdd)
+# pred_y = predict(m2, newdata = newdd)
+
+# methods of bfpco-based FDboost class
+# <Fixed me > coef(m2) does not work because 'd' was not correctly computed by makeGrid function
+# <Fixed me > plot(m2) does not work because the call of coef() function
 
 bfpco <- function(x, s, index = NULL, df = 4, lambda = NULL, pve = 0.99,
                   npc = NULL, npc.max = 15, getEigen = TRUE, distType = "DTW",
