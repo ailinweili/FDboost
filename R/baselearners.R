@@ -1834,40 +1834,40 @@ hyper_fpco <- function(mf, vary, df = 4, lambda = NULL,
 
 
 ### model.matrix for FPCo based functional base-learner
-## test computation of new PCOs 
-# mf = data.frame(fuelSubset$UVVIS)
-# vary = ""
-# args = hyper_fpco(mf, vary, npc = 5, npc.max = 15, s = fuelSubset$uvvis.lambda)
-# 
-# # compute PCOs
-# res1 <- X_fpco(mf, vary, args)
-# # compute PCOs for new points ()
-# res2 <- X_fpco(mf, vary, res1$args)
-# 
-# # new PCOs should be the same(in terms of absolute value) as the old one
-# all.equal(abs(res1$args$klX$points), abs(res2$args$klX$points))
-# 
-# 
-# ## compute PCOs for new data with identical signal index
-# # compute PCOs
-# res3 <- X_fpco(mf, vary, args)
-# # compute PCOs for new data points
-# newdata = mf[1:50,] + matrix(rnorm(50*134,0,1), nrow = 50, ncol = 134)
-# res4 <- X_fpco(mf, vary, res3$args)
-# 
-# 
-# ## compute new PCOs with different signal index
-# # generat new data by take the first 100 rows of mf and the rowmeans of every 3 columns
-# newdata = data.frame(matrix(NA, ncol = 40, nrow = 100))
-# for( i in 1:40 ) 
-#  newdata[,i] = rowMeans(mf[100, (3*i):(3*i+2)])
-# newindex = vector()
-# for(i in 1:40) 
-#  newindex[i] = mean(fuelSubset$uvvis.lambda[(3*i):(3*i+2)])
-# attr(newdata[[1]], "signalIndex") <- newindex 
-# <Fix me > why use first term of a dataframe
-# res5 <- X_fpco(mf = newdata, vary, res3$args)
-# newpcos <- res5$X
+# test computation of new PCOs 
+mf = data.frame(fuelSubset$UVVIS)
+vary = ""
+args = hyper_fpco(mf, vary, npc = 5, npc.max = 15, s = fuelSubset$uvvis.lambda)
+
+# compute PCOs
+res1 <- X_fpco(mf, vary, args)
+# compute PCOs for new points ()
+res2 <- X_fpco(mf, vary, res1$args)
+
+# new PCOs should be the same(in terms of absolute value) as the old one
+all.equal(abs(res1$args$klX$points), abs(res2$args$klX$points))
+
+
+## compute PCOs for new data with identical signal index
+# compute PCOs
+res3 <- X_fpco(mf, vary, args)
+# compute PCOs for new data points
+newdata = mf[1:50,] + matrix(rnorm(50*134,0,1), nrow = 50, ncol = 134)
+res4 <- X_fpco(mf, vary, res3$args)
+
+
+## compute new PCOs with different signal index
+# generat new data by take the first 100 rows of mf and the rowmeans of every 3 columns
+newdata = data.frame(matrix(NA, ncol = 40, nrow = 100))
+for( i in 1:40 ) 
+newdata[,i] = rowMeans(mf[1:100, (3*i):(3*i+2)])
+newindex = vector()
+for(i in 1:40) 
+newindex[i] = mean(fuelSubset$uvvis.lambda[(3*i):(3*i+2)])
+attr(newdata[[1]], "signalIndex") <- newindex 
+<Fix me > why use first term of a dataframe
+res5 <- X_fpco(mf = newdata, vary, res3$args)
+newpcos <- res5$X
 
 X_fpco <- function(mf, vary, args) {
   
@@ -2280,11 +2280,11 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, center = TRUE, random.int = FALSE, 
 # temp$Xnames
 # 
 # 
-# ### Comparison of bfpco based FDboost, bfpc based FDboost and pco based gam 
+# # ### Comparison of bfpco based FDboost, bfpc based FDboost and pco based gam 
 # library(mgcv)
-# require(dtw)
+# library(dtw)
 # 
-# ## First generate the data
+# ## Generate the data, the toy dataset analyzed by Phillip(2017) is used
 # Xnl <- matrix(0, 30, 101)
 # set.seed(813)
 # tt <- sort(sample(1:90, 30))
@@ -2300,8 +2300,7 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, center = TRUE, random.int = FALSE, 
 # 
 # dummy <- rep(1,30) # dummy response variable
 # 
-# 
-# ## Display the toy data
+# # Display data
 # par(mfrow=c(2, 2))
 # matplot((0:100)/100, t(Xnl[c(4, 25), ]), type="l", xlab="t", ylab="",
 #         ylim=range(X.toy), main="Noiseless functions")
@@ -2310,34 +2309,75 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, center = TRUE, random.int = FALSE, 
 # matplot((0:100)/100, t(X.toy), type="l", lty=1, col=y.rainbow, xlab="t",
 #         ylab="", main="Rainbow plot")
 # 
-# ## Obtain DTW distances
+# # Obtain DTW distances
 # D.dtw <- dist(X.toy, method="dtw", window.type="sakoechiba", window.size=5)
 # 
-# ## model data
-# dd <- list(y.toy = y.toy, X.toy = X.toy, s = 1:101)
+# # Model data
+# toydata <- list(y.toy = y.toy, X.toy = X.toy, s = 1:101)
 # 
-# ## fit a model use pco(m1) and bfpco(m2)
+# ## Fit pco-based gam model(m1), fpco-based boosting model(m2), fpc-based boosting model(m3)
 # m1 <- gam(y.toy ~ s(dummy, bs="pco", k=15, xt=list(D=D.dtw)), method="REML")
 # 
 # m2 <- FDboost(y.toy ~ bfpco(X.toy, s = s, distType = "dtw", npc = 15,
 #                             window.type="sakoechiba", window.size=5), 
-#               timeformula = ~ bols(1), data = dd, control = boost_control(mstop = 1000))
+#               timeformula = ~ bols(1), data = toydata, control = boost_control(mstop = 1000))
 # 
-# m3 <- FDboost(y.toy ~ bfpc(X.toy, s = s), timeformula = NULL, data = dd)  
+# m3 <- FDboost(y.toy ~ bfpc(X.toy, s = s), timeformula = NULL, data = toydata)  
 # 
-# # model fitted values
-# print(cbind(y.toy = y.toy, pred_pco = m1$fitted.values, pred_bfpco = m2$fitted(), pred_bfpc = m3$fitted()))
+# # Model fitted values
+# preds = data.frame(y.toy = toydata$y.toy, pred_pco = m1$fitted.values, pred_bfpco = m2$fitted(), pred_bfpc = m3$fitted())
 # 
-# # resudual sum of squares
-# c(sum(m1$residuals^2), sum(m2$resid()^2), sum(m3$resid()^2))
+# #print("response value vs fitted values of pco-based gam model, fpco-based boosting model, fpc-based boositng model:")
+# #print(preds)
 # 
-# # prediction on new data
-# newdd = list(X.toy =  Xnl + matrix(rnorm(30*101, ,0.05), 30), s = 1:101)
-# pred_y = predict(m2, newdata = newdd)
+# par(mfrow=c(2, 2))
+# obs_num = 1:length(toydata$y.toy)
+# matplot(obs_num, preds, type = c("l"), lwd = 1.5, col = 1:4 , main = "model fitted value")
+# legend("topleft", legend = c("y.toy", "pred_pco", "pred_fpco", "pred_fpc"), col=1:4, lwd = 1.5, cex = 0.6)
+# 
+# # Resudual sum of squares
+# c(resid_pco = sum(m1$residuals^2), resid_fpco = sum(m2$resid()^2), resid_fpc = sum(m3$resid()^2))
+# 
+# 
+# ## Prediction for new data
+# # Case when new data have the same time index
+# newdd = list(X.toy = Xnl + matrix(rnorm(30*101, 0, 0.05), 30), s = 1:101)
+# 
+# #newpred_m1 = predict(m1, newdata = newdd)
+# newpred_m2 = predict(m2, newdata = newdd)
+# newpred_m3 = predict(m3, newdd = newdd)
+# 
+# #print("resopnse value vs fpco-based boosting model, fpc-base boosting model(new obs at the same time grids:")
+# #print(cbind(y.toy = toydata$y.toy, pred_fpco = newpred_m2, pred_fpc = newpred_m3))
+# newpreds = data.frame(y.toy = toydata$y.toy, pred_fpco = newpred_m2, pred_fpc = newpred_m3)
+# 
+# matplot(obs_num, newpreds, type = c("l"), lwd = 1.5, col = 1:4, main = "predicton for new data at identical time grids")
+# legend("topleft", legend = c("y.toy","pred_fpco", "pred_fpc"), col=1:4, lwd = 1.5, cex = 0.7)
+# 
+# # Case when new data have different time index
+# new_xtoy = data.frame()
+# for( i in 1:32 ) 
+# new_xtoy[1:nrow(X.toy),i] = rowMeans(X.toy[1:nrow(X.toy), (3*i):(3*i+2)])
+# 
+# new_s = vector()
+# for(i in 1:32) 
+# new_s[i] = mean(newdd$s[(3*i):(3*i+2)])
+# 
+# newdd2 = list(X.toy = as.matrix(new_xtoy), s = as.integer(new_s))
+# 
+# newpred2_m2 = predict(m2, newdata = newdd_2)
+# newpred2_m3 = predict(m3, newdata = newdd_2) 
+# 
+# #print("resopnse value vs fpco-based boosting model, fpc-base boosting model(new obs at differnt time grids):")
+# #print(cbind(y.toy = toydata$y.toy, pred_fpco = newpred2_m2, pred_fpc = newpred2_m3))
+# newpreds2 = data.frame(y.toy = toydata$y.toy, pred_fpco = newpred2_m2, newpred_fpc = newpred2_m3)
+# 
+# matplot(obs_num, newpreds, type = c("l"), pch = 1, col = 1:4, main = "prediciton for new data at differnt time grids")
+# legend("topleft", legend = c("y.toy","pred_fpco", "pred_fpc"), col=1:4, lwd = 1.5 , cex = 0.7)
 
-# methods of bfpco-based FDboost class
-# <Fixed me > coef(m2) does not work because 'd' was not correctly computed by makeGrid function
-# <Fixed me > plot(m2) does not work because the call of coef() function
+#methods of bfpco-based FDboost class
+#<Fixed me > coef(m2) does not work because 'd' was not correctly computed by makeGrid function
+#<Fixed me > plot(m2) does not work because the call of coef() function
 
 bfpco <- function(x, s, index = NULL, df = 4, lambda = NULL, pve = 0.99,
                   npc = NULL, npc.max = 15, getEigen = TRUE, distType = "DTW",
