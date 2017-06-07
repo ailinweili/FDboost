@@ -1,3 +1,10 @@
 .Rproj.user
 .Rhistory
 .RData
+<<<<<<< HEAD
+=======
+.Ruserdata
+/vignettes/*.log
+/vignettes/*.tex
+/vignettes/*.gz
+>>>>>>> master

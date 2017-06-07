@@ -59,7 +59,7 @@ for \code{penalty="pss"} the penalty matrix is transformed to have full rank,
 so called shrinkage approach by Marra and Wood (2011)}
 
 \item{check.ident}{use checks for identifiability of the effect, based on Scheipl and Greven (2016); 
-see Brockhaus et al. (2016) for identifiability checks that take into account the integration limits}
+see Brockhaus et al. (2017) for identifiability checks that take into account the integration limits}
 }
 \value{
 Equally to the base-learners of package mboost: 
@@ -73,7 +73,8 @@ The call of \code{dpp} returns an object of class
 }
 \description{
 Base-learners that fit historical functional effects that can be used with the 
-tensor product, as e.g., hbistx(...) \%X\% bolsc(...).  
+tensor product, as, e.g., \code{hbistx(...) \%X\% bolsc(...)}, to form interaction 
+effects (Ruegamer et al., 2016).  
 For expert use only! May show unexpected behavior  
 compared to other base-learners for functional data!
 }
@@ -87,6 +88,8 @@ The base-learner defaults to a historical effect of the form
 where \eqn{T1} is the minimal index of \eqn{t} of the response \eqn{Y(t)}. 
 \code{bhistx} can only be used if \eqn{Y(t)} and \eqn{x(s)} are observd over
 the same domain \eqn{s,t \in [T1, T2]}. 
+The base-learner \code{bhistx} can be used to set up complex interaction effects 
+like factor-specific historical  effects as discussed in Ruegamer et al. (2016). 
 
 Note that the data has to be supplied as a \code{hmatrix} object for 
 model fit and predictions.
@@ -137,12 +140,16 @@ mod <- FDboost(Y ~ 1 + bhistx(x = X1h, df = 5, knots = 5) \%X\% bols(zlong),
 
 }
 \references{
-Brockhaus, S., Melcher, M., Leisch, F. and Greven, S. (2016): 
-Boosting flexible functional regression models with a high number of functional historical effects, 
-Statistics and Computing, accepted. 
+Brockhaus, S., Melcher, M., Leisch, F. and Greven, S. (2017): 
+Boosting flexible functional regression models with a high number of functional historical effects,  
+Statistics and Computing, 27(4), 913-926. 
 
 Marra, G. and Wood, S.N. (2011): Practical variable selection for generalized additive models. 
 Computational Statistics & Data Analysis, 55, 2372-2387.
+
+Ruegamer D., Brockhaus, S., Gentsch K., Scherer, K., Greven, S. (2016). Detecting synchronisation in 
+EEG- and EMG-Signals via boosted functional historical models. 
+\url{http://arxiv.org/abs/1609.06070}
 
 Scheipl, F., Staicu, A.-M. and Greven, S. (2015): 
 Functional Additive Mixed Models, Journal of Computational and Graphical Statistics, 24(2), 477-501.
@@ -152,7 +159,7 @@ Scheipl, F. and Greven, S. (2016): Identifiability in penalized function-on-func
 Electronic Journal of Statistics, 10(1), 495-526.
 }
 \seealso{
-\code{\link{FDboost}} for the model fit.
+\code{\link{FDboost}} for the model fit and \code{\link{bhist}} 
+for simple hisotorical effects.
 }
 \keyword{models}
-

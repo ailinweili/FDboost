@@ -4,6 +4,8 @@
 \alias{plot.FDboost}
 \alias{plotPredicted}
 \alias{plotResiduals}
+\alias{plotPredicted}
+\alias{plotResiduals}
 \title{Plot the fit or the coefficients of a boosted functional regression model}
 \usage{
 \method{plot}{FDboost}(x, raw = FALSE, rug = TRUE, which = NULL,
@@ -55,7 +57,8 @@ If \code{FALSE}, image/contour-plots (\code{\link[graphics]{image}},
 \code{\link[graphics]{contour}}) are drawn for 2- and 3-dimensional effects.}
 
 \item{commonRange}{logical, defaults to \code{FALSE}, 
-if \code{TRUE} the range over all effects is the same (so far not implemented).}
+if \code{TRUE} the range over all effects is the same 
+(does not affect perspecitve or image plots).}
 
 \item{...}{other arguments, passed to \code{funplot} (only used in plotPredicted)}
 
@@ -77,4 +80,3 @@ plots the fitted effects or the coefficient-functions/surfaces.
 \code{\link{FDboost}} for the model fit and 
 \code{\link{coef.FDboost}} for the calculation of the coefficient functions.
 }
-

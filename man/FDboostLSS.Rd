@@ -5,7 +5,8 @@
 \title{Model-based Gradient Boosting for Functional GAMLSS}
 \usage{
 FDboostLSS(formula, timeformula, data = list(), families = GaussianLSS(),
-  control = boost_control(), weights = NULL, ...)
+  control = boost_control(), weights = NULL, method = c("cyclic",
+  "noncyclic"), ...)
 }
 \arguments{
 \item{formula}{a symbolic description of the model to be fit. 
@@ -33,6 +34,10 @@ For more details see \code{\link[mboost]{boost_control}}.}
 
 \item{weights}{does not work!}
 
+\item{method}{fitting method, currently two methods are supported: 
+\code{"cyclic"} (see Mayr et al., 2012) and \code{"noncyclic"} 
+(algorithm with inner loss of Thomas et al., 2016).}
+
 \item{...}{additional arguments passed to \code{\link[FDboost]{FDboost}}, 
 including, \code{family} and \code{control}.}
 }
@@ -40,7 +45,7 @@ including, \code{family} and \code{control}.}
 An object of class \code{FDboostLSS} that inherits from \code{mboostLSS}. 
 The \code{FDboostLSS}-object is a named list containing one list entry per distribution parameter
 and some attributes. The list is named like the parameters, e.g. mu and sigma, 
-if the parameters mu and sigma are modelled. Each list-element is an object of class \code{FDboost}.
+if the parameters mu and sigma are modeled. Each list-element is an object of class \code{FDboost}.
 }
 \description{
 Function for fitting generalized additive models for location, scale and shape (GAMLSS)  
@@ -48,13 +53,13 @@ with functional data using component-wise gradient boosting, for details see
 Brockhaus et al. (2015a).
 }
 \details{
-For details on the theory of GAMLSS see Rigby and Stasinopoulos (2005). 
-\code{FDboostLSS} uses \code{FDboost} to fit the distibution parameters of a GAMLSS - 
-a functional boosting model is fitted for each parameter. 
-See \code{\link{FDboost}} for details on boosting functional regression models 
-as introduced by Brockhaus et al. (2015b). 
-See \code{\link[gamboostLSS]{mboostLSS}} for 
-details on boosting of GAMLSS for scalar variables as introduced by Mayr et al. (2012).
+For details on the theory of GAMLSS, see Rigby and Stasinopoulos (2005). 
+\code{FDboostLSS} calls \code{FDboost} to fit the distribution parameters of a GAMLSS - 
+a functional boosting model is fitted for each parameter of the response distribution.  
+In \code{\link[gamboostLSS]{mboostLSS}}, details on boosting of GAMLSS based on 
+Mayr et al. (2012) and Thomas et al. (2016) are given.   
+In \code{\link{FDboost}}, details on boosting regression models with functional variables 
+are given (Brockhaus et al., 2015b, Brockhaus et al., 2017).
 }
 \examples{
 ########### simulate Gaussian scalar-on-function data
@@ -107,9 +112,6 @@ summary(m_boost)
  }
 }
 }
-\author{
-Sarah Brockhaus
-}
 \references{
 Brockhaus, S. and Fuest, A. and Mayr, A. and Greven, S. (2015a): 
 Functional regression models for location, scale and shape applied to stock returns. 
@@ -119,6 +121,10 @@ Proceedings of the 30th International Workshop on Statistical Modelling: 117-122
 Brockhaus, S., Scheipl, F., Hothorn, T. and Greven, S. (2015b). 
 The functional linear array model. Statistical Modelling, 15(3), 279-300.
 
+Brockhaus, S., Melcher, M., Leisch, F. and Greven, S. (2017): 
+Boosting flexible functional regression models with a high number of functional historical effects,  
+Statistics and Computing, 27(4), 913-926.
+
 Mayr, A., Fenske, N., Hofner, B., Kneib, T. and Schmid, M. (2012): 
 Generalized additive models for location, scale and shape for high-dimensional 
 data - a flexible approach based on boosting. 
@@ -126,11 +132,19 @@ Journal of the Royal Statistical Society: Series C (Applied Statistics), 61(3), 
 
 Rigby, R. A. and D. M. Stasinopoulos (2005):  
 Generalized additive models for location, scale and shape (with discussion). 
-Journal of the Royal Statistical Society: Series C (Applied Statistics), 54(3), 507-554.
+Journal of the Royal Statistical Society: Series C (Applied Statistics), 54(3), 507-554. 
+
+Thomas, J., Mayr, A., Bischl, B., Schmid, M., Smith, A., and Hofner, B. (2016), 
+Gradient boosting for distributional regression - faster tuning and improved 
+variable selection via noncyclical updates. 
+Accepted for publication in Statistics and Computing.  
+Preliminary version: \url{http://arxiv.org/abs/1611.10171}.
 }
 \seealso{
 Note that \code{FDboostLSS} calls \code{\link{FDboost}} directly.
 }
+\author{
+Sarah Brockhaus
+}
 \keyword{models,}
 \keyword{nonlinear}
-

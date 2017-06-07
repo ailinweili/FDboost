@@ -35,11 +35,8 @@ positive weights can be specified.}
 
 \item{data}{a data frame or list containing the variables in the model.}
 
-\item{weights}{(1) a numeric vector of weights for observational units, 
-i.e. \code{length(weights)} has to be \code{nrow(response)},
-(2) alternatively weights can be specified for single observations then
-\code{length(weights)} has to be \code{nrow(response)}*\code{ncol(response)}
-per default weights is constantly 1.}
+\item{weights}{only for internal use to specify resampling weights;
+per default all weights are equal to 1.}
 
 \item{offset}{a numeric vector to be used as offset over the index of the response (optional).
 If no offset is specified, per default \code{offset = NULL} which means that a 
@@ -73,8 +70,6 @@ The \code{FDboost}-object is a named list containing:
 \item{data}{the data that was used for the model fit}
 \item{id}{the id variable of the response}
 \item{predictOffset}{the function to predict the smooth offset}
-\item{offsetVec}{the offset for one trajectory if the response is represented as matrix and 
-otherwise the offset for all trajectories}
 \item{offsetFDboost}{offset as specified in call to FDboost} 
 \item{offsetMboost}{offset as given to mboost}
 \item{call}{the call to \code{FDboost}}
@@ -100,7 +95,8 @@ be for example time.
 Possible effects are, e.g., a smooth intercept \eqn{\beta_0(t)}, 
 a linear functional effect \eqn{\int x_i(s)\beta(s,t)ds}, 
 potentially with integration limits depending on \eqn{t}, 
-smooth and linear effects of scalar covariates \eqn{f(z_i)} or \eqn{z_i \beta(t)}.
+smooth and linear effects of scalar covariates \eqn{f(z_i,t)} or \eqn{z_i \beta(t)}. 
+A hands-on tutorial for the package can be found at \url{https://arxiv.org/abs/1705.10662}.
 }
 \details{
 In matrix representation of functional response and covariates each row 
@@ -132,7 +128,7 @@ If the response is observed on curve-specific grids it must be supplied
 as a vector in long format and the argument \code{id} has  
 to be specified (as formula!) to define which observations belong to which curve.  
 In this case the base-learners are built as row tensor-products of marginal base-learners, 
-see Scheipl et al. (2015) and Brockhaus et al. (2016), for details on how to set up the effects. 
+see Scheipl et al. (2015) and Brockhaus et al. (2017), for details on how to set up the effects. 
 The row tensor product of two marginal bases is implemented in R-package mboost 
 in the function \code{\%X\%}, see \code{\link[mboost]{\%X\%}}. 
 
@@ -170,7 +166,7 @@ The \code{timeformula} is used to expand the effects in \code{t}-direction.
   are specified as \code{bols(z1) \%Xc\% bols(z2)} and  
   an interaction \eqn{z_i1 f(zi2, t)} as \code{bols(z1) \%Xc\% bbs(z2)}, as 
   \code{\%Xc\%} applies the sum-to-zero constraint to the desgin matrix of the tensor product 
-  built by \code{\%Xc\%}, see \code{\link{\%Xc\%}}, EXPERIMENTAL!
+  built by \code{\%Xc\%}, see \code{\link{\%Xc\%}}.
 \item Function-on-function regression terms of functional covariates \code{x}, 
   e.g., \eqn{\int x_i(s)\beta(s,t)ds}, specified as \code{bsignal(x, s = s)}, 
   using P-splines, see \code{\link{bsignal}}. 
@@ -269,13 +265,13 @@ mod1 <- FDboost(vis ~ 1 + bolsc(T_C, df = 2) + bolsc(T_A, df = 2),
   cvm1 <- cvrisk(mod1, folds = folds1, grid = 1:500)
   ## plot(cvm1)
   mstop(cvm1)
-}
-
+  
 ## look at the model
 summary(mod1)
 coef(mod1)
-## plot(mod1)
-## plotPredicted(mod1, lwdPred = 2)
+plot(mod1)
+plotPredicted(mod1, lwdPred = 2)
+}
 
 ######## Example for scalar-on-function-regression 
 data("fuelSubset", package = "FDboost")
@@ -291,17 +287,25 @@ fuelSubset$uvvis.lambda <- with(fuelSubset, (uvvis.lambda - min(uvvis.lambda)) /
 fuelSubset$nir.lambda <- with(fuelSubset, (nir.lambda - min(nir.lambda)) / 
                                           (max(nir.lambda) - min(nir.lambda) )) 
 
-## possibility 1: as FLAM model with the scalar response 
-## adds a penalty over the index of the response
-## thus, mod2f and mod2 have different panlties 
-mod2f <- FDboost(heatan ~ bsignal(UVVIS, uvvis.lambda, knots = 40, df = 4, check.ident = FALSE) 
-               + bsignal(NIR, nir.lambda, knots = 40, df = 4, check.ident = FALSE), 
-               timeformula = ~bols(1), data = fuelSubset, control = boost_control(mstop = 200))
-
-## possibility 2: with scalar response 
+## model fit with scalar response 
+## include no intercept as all base-learners are centered around 0
 mod2 <- FDboost(heatan ~ bsignal(UVVIS, uvvis.lambda, knots = 40, df = 4, check.ident = FALSE) 
                + bsignal(NIR, nir.lambda, knots = 40, df = 4, check.ident = FALSE), 
                timeformula = NULL, data = fuelSubset, control = boost_control(mstop = 200)) 
+               
+## additionally include a non-linear effect of the scalar variable h2o 
+mod2s <- FDboost(heatan ~ bsignal(UVVIS, uvvis.lambda, knots = 40, df = 4, check.ident = FALSE) 
+               + bsignal(NIR, nir.lambda, knots = 40, df = 4, check.ident = FALSE) 
+               + bbs(h2o, df = 4), 
+               timeformula = NULL, data = fuelSubset, control = boost_control(mstop = 200)) 
+               
+## alternative model fit as FLAM model with scalar response; as timeformula = ~ bols(1)  
+## adds a penalty over the index of the response, i.e., here a ridge penalty
+## thus, mod2f and mod2 have different penalties 
+mod2f <- FDboost(heatan ~ bsignal(UVVIS, uvvis.lambda, knots = 40, df = 4, check.ident = FALSE) 
+               + bsignal(NIR, nir.lambda, knots = 40, df = 4, check.ident = FALSE), 
+               timeformula = ~ bols(1), data = fuelSubset, control = boost_control(mstop = 200))
+               
 \dontrun{   
   ## bootstrap to find optimal mstop takes some time
   set.seed(123)      
@@ -328,10 +332,11 @@ if(require(fda)){
   ## fit model with cyclic splines over the year
   mod3 <- FDboost(l10precip ~ bols(region, df = 2.5, contrasts.arg = "contr.dummy") 
                    + bsignal(temp, month.s, knots = 11, cyclic = TRUE, 
-                           df = 2.5, boundary.knots = c(0.5,12.5), check.ident = FALSE), 
-                   timeformula = ~ bbs(month.t, knots = 11, cyclic = TRUE, 
-                                  df = 3, boundary.knots = c(0.5, 12.5)), 
-                   offset = "scalar", offset_control = o_control(k_min = 5), 
+                             df = 2.5, boundary.knots = c(0.5,12.5), check.ident = FALSE), 
+                  timeformula = ~ bbs(month.t, knots = 11, cyclic = TRUE, 
+                                      df = 3, boundary.knots = c(0.5, 12.5)), 
+                  offset = "scalar", offset_control = o_control(k_min = 5), 
+                  control = boost_control(mstop = 60), 
                   data = CanadianWeather) 
  
  \dontrun{                  
@@ -339,12 +344,12 @@ if(require(fda)){
    ## using the function applyFolds 
    set.seed(123)
    folds3 <- cv(rep(1, length(unique(mod3$id))), B = 5)
-   appl3 <- applyFolds(mod3, folds = folds3)
+   appl3 <- applyFolds(mod3, folds = folds3, grid = 1:200)
  
    ## use function cvrisk; be careful to do the resampling on the level of curves
    set.seed(123)
    folds3long <- cvLong(id = mod3$id, weights = model.weights(mod3), B = 5)
-   cvm3 <- cvrisk(mod3, folds = folds3long, grid = 1:500)
+   cvm3 <- cvrisk(mod3, folds = folds3long, grid = 1:200)
    mstop(cvm3) ## mod3[64]
    
    summary(mod3)
@@ -382,7 +387,7 @@ mod4 <- FDboost(vis ~ 1 + bols(T_C, contrasts.arg = "contr.sum", intercept = FAL
                 numInt = "Riemann", family = QuantReg(),
                 offset = NULL, offset_control = o_control(k_min = 9),
                 data = dataIrregular, control = boost_control(mstop = 50, nu = 0.4))
-summary(mod4)
+## summary(mod4)
 ## plot(mod4)
 ## plotPredicted(mod4, lwdPred = 2)
 
@@ -416,29 +421,32 @@ pred <- predict(mod4, newdata = newd)
                   
                 
 }
-\author{
-Sarah Brockhaus, Torsten Hothorn
-}
 \references{
+Brockhaus, S., Ruegamer, D. and Greven, S. (2017):
+Boosting Functional Regression Models with FDboost.
+\url{https://arxiv.org/abs/1705.10662}
+
 Brockhaus, S., Scheipl, F., Hothorn, T. and Greven, S. (2015): 
 The functional linear array model. Statistical Modelling, 15(3), 279-300. 
 
-Brockhaus, S., Melcher, M., Leisch, F. and Greven, S. (2016): 
+Brockhaus, S., Melcher, M., Leisch, F. and Greven, S. (2017): 
 Boosting flexible functional regression models with a high number of functional historical effects,  
-Statistics and Computing, accepted.  
+Statistics and Computing, 27(4), 913-926.   
 
 Currie, I.D., Durban, M. and Eilers P.H.C. (2006):  
 Generalized linear array models with applications to multidimensional smoothing. 
 Journal of the Royal Statistical Society, Series B-Statistical Methodology, 68(2), 259-280.
 
 Scheipl, F., Staicu, A.-M. and Greven, S. (2015):  
-Functional Additive Mixed Models, Journal of Computational and Graphical Statistics, 24(2), 477-501.
+Functional additive mixed models, Journal of Computational and Graphical Statistics, 24(2), 477-501.
 }
 \seealso{
 Note that \link{FDboost} calls \code{\link[mboost]{mboost}} directly.  
 See, e.g., \code{\link[FDboost]{bsignal}} and \code{\link[FDboost]{bbsc}} 
 for possible base-learners.
 }
+\author{
+Sarah Brockhaus, Torsten Hothorn
+}
 \keyword{models,}
 \keyword{nonlinear}
-

@@ -2,22 +2,28 @@
 % Please edit documentation in R/methods.R
 \name{summary.FDboost}
 \alias{summary.FDboost}
-\title{Summary of a boosted functional regression model}
+\alias{print.FDboost}
+\alias{print.FDboost}
+\title{Print and summary of a boosted functional regression model}
 \usage{
 \method{summary}{FDboost}(object, ...)
+
+\method{print}{FDboost}(x, ...)
 }
 \arguments{
 \item{object}{a fitted \code{FDboost}-object}
 
 \item{...}{currently not used}
+
+\item{x}{a fitted \code{FDboost}-object}
 }
 \value{
-a list with summary information
+a list with information on the model / a list with summary information
 }
 \description{
-Takes a fitted \code{FDboost}-object and produces a summary.
+Takes a fitted \code{FDboost}-object and produces a print 
+to the console or a summary.
 }
 \seealso{
 \code{\link{FDboost}} for the model fit.
 }
-
