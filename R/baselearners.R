@@ -2149,7 +2149,7 @@ cmdscale_lanczos_new <- function(d, npc = NULL, pve = 0.99, npc.max = 15,
 
 
 ### FPCO by smooth centered dissimilarity matrix
-fpco.sc <- function(Y = NULL, Y.pred = NULL, center = TRUE, random.int = FALSE, nbasis = 10,
+fpco.sc <- function(Y = NULL, Y.pred = NULL, center = FALSE, random.int = FALSE, nbasis = 10,
                    argvals = NULL, distType = NULL, npc = NULL, npc.max = NULL, pve = 0.99, ...) {
   
   ## longer computation time due to dist function
@@ -2179,7 +2179,7 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, center = TRUE, random.int = FALSE, 
     # do not center
      Y.tilde = Y
     #Y.tilde = Y - matrix(colMeans(Y, na.rm = TRUE), I, D, byrow = TRUE)
-    mu = rep(0, D)
+     mu = rep(0, D)
   }
   
   # dissimilarity matrix
