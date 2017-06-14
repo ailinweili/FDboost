@@ -8,6 +8,7 @@
 \alias{bconcurrent}
 \alias{bhist}
 \alias{bfpc}
+\alias{bfpco}
 \title{Base-learners for Functional Covariates}
 \usage{
 bsignal(x, s, index = NULL, inS = c("smooth", "linear", "constant"),
@@ -27,6 +28,9 @@ bhist(x, s, time, index = NULL, limits = "s<=t", standard = c("no",
 bfpc(x, s, index = NULL, df = 4, lambda = NULL, penalty = c("identity",
   "inverse", "no"), pve = 0.99, npc = NULL, npc.max = 15,
   getEigen = TRUE)
+
+bfpco(x, s, index = NULL, df = 4, lambda = NULL, pve = 0.99,
+  npc = NULL, npc.max = 15, getEigen = TRUE, distType = "DTW", ...)
 }
 \arguments{
 \item{x}{matrix of functional variable x(s). The functional covariate has to be 
@@ -129,6 +133,8 @@ The call of \code{dpp()} returns an object of class
 }
 \description{
 Base-learners that fit effects of functional covariates.
+
+FPCO base-learner
 }
 \details{
 \code{bsignal()} implements a base-learner for functional covariates to  

@@ -1,4 +1,3 @@
-
 #' Functions to compute integration weights
 #' 
 #' Computes trapezoidal integration weights (Riemann sums) for a functional variable 
@@ -2003,7 +2002,7 @@ X_fpco <- function(mf, vary, args) {
 # all.equal(abs(res1$evalues),abs(res2$eig[1:length(res1$evalues)]))
 # all.equal(res1$x, res2$x)
 # all.equal(res1$ac, res2$ac)
-
+#' @importFrom mgcv slanczos
 cmdscale_lanczos_new <- function(d, npc = NULL, pve = 0.99, npc.max = 15, 
                                  eig = FALSE, add = FALSE, x.ret = FALSE){
   ## to do 
@@ -2165,8 +2164,12 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, center = FALSE, random.int = FALSE,
   }
   
   # dissimilarity matrix
+  # if single functional is presented
   Dist <- dist(Y.tilde, method = distType, ...) 
   Dist <- as.matrix(Dist)
+  
+  # if multivariate functionals are presented
+  
   
   # modify cmdsclale_lanczos function from refund package
   # because cmdscale_lanczos does not allow to select pco by pve
@@ -2224,12 +2227,13 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, center = FALSE, random.int = FALSE,
 
 
 ################################################################################
-# FPCO base-learner 
-# import DTW
-# @importFrom proxy dist
-# @importFrom mgcv gam
-# @importFrom gamm4 gamm4
-# @exmaples
+#' FPCO base-learner 
+#' @import dtw
+#' @importFrom proxy dist
+#' @importFrom mgcv gam
+#' @importFrom gamm4 gamm4
+#' @export
+#' @rdname bsignal
 # ## functional principal coordinates base learner 
 # 
 # library(FDboost)
@@ -2374,8 +2378,6 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, center = FALSE, random.int = FALSE,
 # gcvdata <- data.frame(aveperf_fpco, aveperf_fpc)
 # matplot(1:15, gcvdata, type = "b", main = "model performance over number of pc/pco",
 #         xlab = "number of pc/pco", ylab = "GCV", pch = c(17,15))
-
-
 bfpco <- function(x, s, index = NULL, df = 4, lambda = NULL, pve = 0.99,
                   npc = NULL, npc.max = 15, getEigen = TRUE, distType = "DTW",
                   ...){
