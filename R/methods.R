@@ -213,7 +213,7 @@ predict.FDboost <- function(object, newdata = NULL, which = NULL, toFDboost = TR
     # for regular response: repeat offset accordingly 
     if(classObject[1]=="FDboost") predOffset <- rep(predOffset, each=n)
     
-    ### In the case of bsignal(), bfpc(), bconcurrent() and bhist() it is necessary 
+    ### In the case of bsignal(), bfpc(), bfpco(), bconcurrent() and bhist() it is necessary 
     # to add the index of the signal-matrix as attribute
     posBsignal <- c(grep("bsignal(", names(object$baselearner), fixed = TRUE), 
                     grep("bfpc(", names(object$baselearner), fixed = TRUE),

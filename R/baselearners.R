@@ -1810,12 +1810,15 @@ hyper_fpco <- function(mf, vary, df = 4, lambda = NULL,
                        pve = 0.99, npc = NULL, npc.max = 15, getEigen=TRUE,
                        s=NULL, distType = "DTW", ...) {
   list(df = df, lambda = lambda, pve = pve, npc = npc, npc.max = npc.max,
-       getEigen = getEigen, s = s, prediction = FALSE, distType = distType, ...)
+       getEigen = getEigen, s = s, prediction = FALSE, distType = distType, distparams = list(...))
 }
 
 
 ### model.matrix for FPCo based functional base-learner
 # test computation of new PCOs 
+# library(FDboost)
+# data("fuelSubset")
+# 
 # mf = data.frame(fuelSubset$UVVIS)
 # vary = ""
 # args = hyper_fpco(mf, vary, npc = 5, npc.max = 15, s = fuelSubset$uvvis.lambda)
@@ -1827,7 +1830,7 @@ hyper_fpco <- function(mf, vary, df = 4, lambda = NULL,
 # 
 # # new PCOs should be the same(in terms of absolute value) as the old one
 # all.equal(abs(res1$args$klX$points), abs(res2$args$klX$points))
-# 
+#
 # 
 # ## compute PCOs for new data with identical signal index
 # # compute PCOs
@@ -1869,13 +1872,13 @@ X_fpco <- function(mf, vary, args) {
                        pve = args$pve, npc = args$npc, npc.max = args$npc.max)
     
     # IS THERE ANY SMARTER WAY TO FIND DISTANCE ARGUMENTS
-    ellipse_index <- which((names(args) %in% c("df","lambda","pve","npc",
-                                               "npc.max","getEigen","s",
-                                               "prediction", "distType")) 
-                           == FALSE)
+    #ellipse_index <- which((names(args) %in% c("df","lambda","pve","npc",
+    #                                           "npc.max","getEigen","s",
+    #                                           "prediction", "distType")) 
+    #                       == FALSE)
 
     
-    decomppars <- c(decomppars, args[ellipse_index])
+    decomppars <- c(decomppars, args$distparams)
     #decomppars <- c(decomppars, dots)
     
     decomppars$Y <- X1
@@ -1901,7 +1904,7 @@ X_fpco <- function(mf, vary, args) {
     if(ncol(X1) == length(klX$mu) && all(args$s == xind)){
       # coordinate for the new data inserted into principal coordinate space
       # refer pco_predict_preprocess of refund package to add additive constant
-      Dist <- as.matrix(dist(rbind(klX$Y, X1), distType = args$distType))   # (n+nnew)*(n+nnew) how to put the ellipse term?
+      Dist <- as.matrix(do.call(dist, c(list(rbind(klX$Y, X1), method = args$distType), args$distparams)))   # (n+nnew)*(n+nnew) how to put the ellipse term for new data?
       N1 <- nrow(klX$Y)
       N2 <- nrow(X1)
       Dist <- Dist[1:N1, N1+(1:N2)] # n*nnew
@@ -2323,7 +2326,7 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, center = FALSE, random.int = FALSE,
 # 
 # par(mfrow=c(2, 2))
 # obs_id = 1:length(toydata$y.toy)
-# matplot(obs_id, preds, type = c("l"), lwd = 1.5, col = 1:4 , main = "model fitted value")
+# matplot(obs_id, fitteds, type = c("l"), lwd = 1.5, col = 1:4 , main = "model fitted value")
 # legend("topleft", legend = c("y.toy", "fitted_pco", "fitted_fpco", "fitted_fpc"), col=1:4, lwd = 1.5, cex = 0.6)
 # 
 # # Average of square residual
