@@ -1830,7 +1830,7 @@ hyper_fpco <- function(mf, vary, df = 4, lambda = NULL,
 # 
 # # new PCOs should be the same(in terms of absolute value) as the old one
 # all.equal(abs(res1$args$klX$points), abs(res2$args$klX$points))
-#
+# 
 # 
 # ## compute PCOs for new data with identical signal index
 # # compute PCOs
@@ -1904,7 +1904,7 @@ X_fpco <- function(mf, vary, args) {
     if(ncol(X1) == length(klX$mu) && all(args$s == xind)){
       # coordinate for the new data inserted into principal coordinate space
       # refer pco_predict_preprocess of refund package to add additive constant
-      Dist <- as.matrix(do.call(dist, c(list(rbind(klX$Y, X1), method = args$distType), args$distparams)))   # (n+nnew)*(n+nnew) how to put the ellipse term for new data?
+      Dist <- as.matrix(do.call(dist, c(list(rbind(klX$Y, X1), method = args$distType), args$distparams)))   # (n+nnew)*(n+nnew) 
       N1 <- nrow(klX$Y)
       N2 <- nrow(X1)
       Dist <- Dist[1:N1, N1+(1:N2)] # n*nnew
@@ -1932,7 +1932,7 @@ X_fpco <- function(mf, vary, args) {
          for (i in 1:nrow(args$klX$Y))    
            approxY[i, ] <- approx(x = args$klX$xind, y = klX$Y[i,], xout = xind)$y
          
-        Dist <- as.matrix(dist(rbind(approxY, X1), distType = args$distType))
+        Dist <- as.matrix(do.call(dist, c(list(rbind(approxY, X1), method = args$distType), args$distparams)))
         N1 <- nrow(approxY)
         N2 <- nrow(X1)
         Dist <- Dist[1:N1, N1+(1:N2)] # n*nnew
@@ -1963,8 +1963,7 @@ X_fpco <- function(mf, vary, args) {
       }
   }
   
-  colnames(X) <- paste("Xdummy", 1:ncol(X), sep = "")
-  
+  colnames(X) <- paste(xname, ".PCo", 1:ncol(X), sep = "")
   
   ### PENALTY MATRIX: DIAGNONAL MATRIX OF INVERSE EIGEN-VALUES
   ### Penalty matrix: diagonal matrix of inverse eigen-values
@@ -2275,8 +2274,8 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, center = FALSE, random.int = FALSE,
 # temp$df()
 # # the names of PCOs
 # temp$Xnames
-
-
+#
+#
 ### Comparison of bfpco based FDboost, bfpc based FDboost and pco based gam 
 # library(mgcv)
 # library(dtw)
@@ -2296,7 +2295,7 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, center = FALSE, random.int = FALSE,
 #                                     diff(range(y.toy))*29+1]
 # 
 # dummy <- rep(1,30) # dummy response variable
-# 
+#
 # # Display data
 # par(mfrow=c(2, 2))
 # matplot((0:100)/100, t(Xnl[c(4, 25), ]), type="l", xlab="t", ylab="",
@@ -2311,16 +2310,16 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, center = FALSE, random.int = FALSE,
 # 
 # # Model data
 # toydata <- list(y.toy = y.toy, X.toy = X.toy, s = 1:101)
-# 
+#
 # ## Fit pco-based gam model(m1), fpco-based boosting model(m2), fpc-based boosting model(m3)
 # m1 <- gam(y.toy ~ s(dummy, bs="pco", k=15, xt=list(D=D.dtw)), method="REML")
 # 
 # m2 <- FDboost(y.toy ~ bfpco(X.toy, s = s, distType = "dtw", npc = 15,
 #                             window.type="sakoechiba", window.size=5), 
-#               timeformula = ~ bols(1), data = toydata, control = boost_control(mstop = 200))
+#               timeformula = NULL, data = toydata, control = boost_control(mstop = 200))
 #  
 # m3 <- FDboost(y.toy ~ bfpc(X.toy, s = s), timeformula = NULL, data = toydata)  
-# 
+#
 # # Model fitted values
 # fitteds = data.frame(y.toy = toydata$y.toy, fitted_pco = m1$fitted.values, fitted_bfpco = m2$fitted(), fitted_bfpc = m3$fitted())
 # 
