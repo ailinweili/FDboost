@@ -5,6 +5,7 @@
 \alias{bconcurrent}
 \alias{bhist}
 \alias{bfpc}
+\alias{bfpco}
 \alias{bconcurrent}
 \alias{bhist}
 \alias{bfpc}
@@ -120,6 +121,12 @@ used to choose the number of functional principal components (FPCs).}
 \item{npc.max}{maximal number K of FPCs to use; defaults to 15.}
 
 \item{getEigen}{save the eigenvalues and eigenvectors, defaults to \code{TRUE}.}
+
+\item{distType}{only valid for \code{bfpco} base learner, it refers to type 
+of distance measrue, which is computed among data, the same as the method 
+paramter of \code{dist}}
+
+\item{...}{other paramater of distance measure in \code{bfpco} base-learner}
 }
 \value{
 Equally to the base-learners of package \code{mboost}: 

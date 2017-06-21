@@ -453,8 +453,12 @@ X_bsignal <- function(mf, vary, args) {
 #' @param npc prespecified value for the number K of FPCs (if given, this overrides \code{pve}).
 #' @param npc.max maximal number K of FPCs to use; defaults to 15. 
 #' @param getEigen save the eigenvalues and eigenvectors, defaults to \code{TRUE}. 
+#' @param distType only valid for \code{bfpco} base learner, it refers to type 
+#' of distance measrue, which is computed among data, the same as the method 
+#' paramter of \code{dist}
+#' @param ... other paramater of distance measure in \code{bfpco} base-learner
 #' 
-#' @aliases bconcurrent bhist bfpc 
+#' @aliases bconcurrent bhist bfpc bfpco
 #' 
 #' @details \code{bsignal()} implements a base-learner for functional covariates to  
 #' estimate an effect of the form \eqn{\int x_i(s)\beta(s)ds}. Defaults to a cubic  
