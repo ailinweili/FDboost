@@ -30,8 +30,9 @@ bfpc(x, s, index = NULL, df = 4, lambda = NULL, penalty = c("identity",
   "inverse", "no"), pve = 0.99, npc = NULL, npc.max = 15,
   getEigen = TRUE)
 
-bfpco(x, s, index = NULL, df = 4, lambda = NULL, pve = 0.99,
-  npc = NULL, npc.max = 15, getEigen = TRUE, distType = "DTW", ...)
+bfpco(x, s, index = NULL, df = 4, lambda = NULL, penalty = "identity",
+  pve = 0.99, npc = NULL, npc.max = 15, getEigen = TRUE,
+  distType = "DTW", ...)
 }
 \arguments{
 \item{x}{matrix of functional variable x(s). The functional covariate has to be 
@@ -126,7 +127,7 @@ used to choose the number of functional principal components (FPCs).}
 of distance measrue, which is computed among data, the same as the method 
 paramter of \code{dist}}
 
-\item{...}{other paramater of distance measure in \code{bfpco} base-learner}
+\item{...}{other paramater of distance measure as in \code{\link[proxy]{dist}} for \code{bfpco} base-learner}
 }
 \value{
 Equally to the base-learners of package \code{mboost}: 

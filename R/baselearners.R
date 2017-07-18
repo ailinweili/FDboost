@@ -456,7 +456,7 @@ X_bsignal <- function(mf, vary, args) {
 #' @param distType only valid for \code{bfpco} base learner, it refers to type 
 #' of distance measrue, which is computed among data, the same as the method 
 #' paramter of \code{dist}
-#' @param ... other paramater of distance measure in \code{bfpco} base-learner
+#' @param ... other paramater of distance measure as in \code{\link[proxy]{dist}} for \code{bfpco} base-learner
 #' 
 #' @aliases bconcurrent bhist bfpc bfpco
 #' 
@@ -1810,10 +1810,10 @@ bfpc <- function(x, s, index = NULL, df = 4,
 
 
 ### hyper parameters for signal baselearner with eigenfunctions as bases, FPCO-based
-hyper_fpco <- function(mf, vary, df = 4, lambda = NULL,
-                       pve = 0.99, npc = NULL, npc.max = 15, getEigen=TRUE,
-                       s=NULL, distType = "DTW", ...) {
-  list(df = df, lambda = lambda, pve = pve, npc = npc, npc.max = npc.max,
+hyper_fpco <- function(mf, vary, df = 4, lambda = NULL,penalty = "identity",
+                       pve = 0.95, npc = NULL, npc.max = 15, getEigen=TRUE,
+                       s=NULL, distType = "Euclidean", ...) {
+  list(df = df, lambda = lambda, penalty = penalty, pve = pve, npc = npc, npc.max = npc.max,
        getEigen = getEigen, s = s, prediction = FALSE, distType = distType, distparams = list(...))
 }
 
@@ -1872,7 +1872,7 @@ X_fpco <- function(mf, vary, args) {
   
   ## do FPCO on X1 
   if(is.null(args$klX)){
-    decomppars <- list(distType = args$distType,
+    decomppars <- list(argvals = xind, distType = args$distType,
                        pve = args$pve, npc = args$npc, npc.max = args$npc.max)
     
     # IS THERE ANY SMARTER WAY TO FIND DISTANCE ARGUMENTS
@@ -1969,20 +1969,19 @@ X_fpco <- function(mf, vary, args) {
   
   colnames(X) <- paste(xname, ".PCo", 1:ncol(X), sep = "")
   
-  ### PENALTY MATRIX: DIAGNONAL MATRIX OF INVERSE EIGEN-VALUES
-  ### Penalty matrix: diagonal matrix of inverse eigen-values
-  ### implicit assumption: important eigen-functions of X process
-  ### are more important in shape of beta
-  ## K <- diag(1/klX$evalues[args$subset])
-  
-  ### use the identity matrix for penalization
-  ### all eigenfunctions are penalized with the same strength
-  ### PENALTY IS DONE BY TRUNCATING NUMBER OF PCs
-  K <- diag(rep(1, length=length(args$subset)))
-  
-  ### no penalty at all, as regularization is done by truncating the number of PCs used
-  ### gives bad estimates
-  # K <- matrix(0, ncol=length(args$subset), nrow=length(args$subset))
+  ## set up the penalty matrix 
+  K <- switch(args$penalty, 
+              ### use the identity matrix for penalization
+              ### all eigenfunctions are penalized with the same strength
+              identity = diag(rep(1, length = length(args$subset))),  
+              ## Penalty matrix: diagonal matrix of inverse eigen-values
+              ## implicit assumption: important eigen-functions of X process 
+              ## are more important in shape of beta
+              inverse = diag(1 / klX$evalues[args$subset]), 
+              ### no penalty at all, as regularization is done by truncating the number of PCs used
+              ### gives bad estimates
+              no = matrix(0, ncol = length(args$subset), nrow = length(args$subset))
+  )
   
   # X is the pco points or inserted pco points, K is the penalty matrix, 
   # args expand from args paramter and contain mainly pco analysis results
@@ -2001,19 +2000,16 @@ X_fpco <- function(mf, vary, args) {
 # x = fuelSubset$UVVIS
 # d = dist(x, method = "dtw")
 # 
-# i = 1
+# i = 5
 # res1 <- cmdscale_lanczos_new(d, npc = i, pve = 0.99, npc.max = 15, eig = TRUE)
-# res2 <- cmdscale_lanczos(d, k = i, eig = TRUE)
+# res2 <- refund:::cmdscale_lanczos(d, k = i, eig = TRUE)
 # all.equal(abs(res1$points),abs(res2$points))
 # all.equal(abs(res1$evalues),abs(res2$eig[1:length(res1$evalues)]))
 # all.equal(res1$x, res2$x)
 # all.equal(res1$ac, res2$ac)
 #' @importFrom mgcv slanczos
-cmdscale_lanczos_new <- function(d, npc = NULL, pve = 0.99, npc.max = 15, 
+cmdscale_lanczos_new <- function(d, npc = NULL, pve = 0.95, npc.max = 15, 
                                  eig = FALSE, add = FALSE, x.ret = FALSE){
-  ## to do 
-  # remove npc > npc.max
-  
   if (anyNA(d))
     stop("NA values not allowed in 'd'")
   if (is.null(n <- attr(d, "Size"))) {
@@ -2137,7 +2133,7 @@ cmdscale_lanczos_new <- function(d, npc = NULL, pve = 0.99, npc.max = 15,
 
 ### FPCO by smooth centered dissimilarity matrix
 fpco.sc <- function(Y = NULL, Y.pred = NULL, center = FALSE, random.int = FALSE, nbasis = 10,
-                   argvals = NULL, distType = NULL, npc = NULL, npc.max = NULL, pve = 0.99, ...) {
+                   argvals = NULL, distType = NULL, npc = NULL, npc.max = NULL, pve = 0.95, ...) {
   
   ## longer computation time due to dist function
   
@@ -2180,7 +2176,7 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, center = FALSE, random.int = FALSE,
   # modify cmdsclale_lanczos function from refund package
   # because cmdscale_lanczos does not allow to select pco by pve
   ll <- cmdscale_lanczos_new(d = Dist, npc = npc, npc.max = npc.max, pve = pve, 
-                               eig = TRUE, add = TRUE, x.ret = TRUE)
+                               eig = TRUE, add = FALSE, x.ret = TRUE)
   
   points <- ll$points
   evalues <- ll$evalues
@@ -2242,7 +2238,6 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, center = FALSE, random.int = FALSE,
 #' @rdname bsignal
 # ## functional principal coordinates base learner 
 # 
-# library(FDboost)
 # library(mgcv)
 # library(dtw)
 # data(fuelSubset)
@@ -2250,15 +2245,24 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, center = FALSE, random.int = FALSE,
 # x = fuelSubset$UVVIS
 # s = fuelSubset$uvvis.lambda
 # 
-# bs1 <- bfpco(x, s, distType = "DTW", window.type="sakoechiba", window.size=5) # class blg
+# bs1 <- bfpco(x, s, distType = "Euclidean") # class blg
+# bs2 <- bfpc(x, s)
 # 
 # bs1$model.frame() # 129*134
-# bs1$get_call() # 
-# bs1$get_data() # 129*134
-# bs1$get_index() # 
-# bs1$get_vary() # 
+# bs2$model.frame()
+# all.equal(bs1$model.frame(), bs2$model.frame())
+# bs1$get_call()
+# bs2$get_call() 
+# bs1$get_data() # 129*1, practically 129*134
+# bs2$get_data() # 129*1, practically 129*134
+# bs1$get_index() # NULL
+# bs2$get_index() # NULL
+# bs1$get_vary() # ""
+# bs2$get_vary() # ""
 # bs1$get_names() 
+# bs2$get_names()
 # bs1$dpp(weights = rep(1, nrow(x))) 
+# bs2$dpp(weights = rep(1, nrow(x)))
 # # 
 # # look into dpp 
 # temp = bs1$dpp(weights = rep(1, nrow(x))) 
@@ -2283,6 +2287,7 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, center = FALSE, random.int = FALSE,
 ### Comparison of bfpco based FDboost, bfpc based FDboost and pco based gam 
 # library(mgcv)
 # library(dtw)
+# library(refund)
 # 
 # ## Generate data, the toy dataset analyzed by Phillip(2017) is used
 # Xnl <- matrix(0, 30, 101)
@@ -2299,7 +2304,7 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, center = FALSE, random.int = FALSE,
 #                                     diff(range(y.toy))*29+1]
 # 
 # dummy <- rep(1,30) # dummy response variable
-#
+# 
 # # Display data
 # par(mfrow=c(2, 2))
 # matplot((0:100)/100, t(Xnl[c(4, 25), ]), type="l", xlab="t", ylab="",
@@ -2309,21 +2314,21 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, center = FALSE, random.int = FALSE,
 # matplot((0:100)/100, t(X.toy), type="l", lty=1, col=y.rainbow, xlab="t",
 #         ylab="", main="Rainbow plot")
 # 
-# # Obtain DTW distances
+# Obtain DTW distances
 # D.dtw <- dist(X.toy, method="dtw", window.type="sakoechiba", window.size=5)
 # 
 # # Model data
 # toydata <- list(y.toy = y.toy, X.toy = X.toy, s = 1:101)
-#
-# ## Fit pco-based gam model(m1), fpco-based boosting model(m2), fpc-based boosting model(m3)
+# 
+# # Fit pco-based gam model(m1), fpco-based boosting model(m2), fpc-based boosting model(m3)
 # m1 <- gam(y.toy ~ s(dummy, bs="pco", k=15, xt=list(D=D.dtw)), method="REML")
 # 
-# m2 <- FDboost(y.toy ~ bfpco(X.toy, s = s, distType = "dtw", npc = 15,
-#                             window.type="sakoechiba", window.size=5), 
-#               timeformula = NULL, data = toydata, control = boost_control(mstop = 200))
+# m2 <- FDboost(y.toy ~ bfpco(X.toy, s = s, distType = "dtw", pve = 0.99,
+#                            window.type="sakoechiba", window.size=5), 
+#              timeformula = NULL, data = toydata, control = boost_control(mstop = 200))
 #  
 # m3 <- FDboost(y.toy ~ bfpc(X.toy, s = s), timeformula = NULL, data = toydata)  
-#
+# 
 # # Model fitted values
 # fitteds = data.frame(y.toy = toydata$y.toy, fitted_pco = m1$fitted.values, fitted_bfpco = m2$fitted(), fitted_bfpc = m3$fitted())
 # 
@@ -2341,7 +2346,7 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, center = FALSE, random.int = FALSE,
 # newdd = list(X.toy = Xnl + matrix(rnorm(30*101, 0, 0.05), 30), s = 1:101)
 # 
 # newpred_m2 = predict(m2, newdata = newdd)
-# newpred_m3 = predict(m3, newdd = newdd)
+# newpred_m3 = predict(m3, newdata = newdd)
 # newpreds = data.frame(y.toy = toydata$y.toy, pred_fpco = newpred_m2, pred_fpc = newpred_m3)
 # 
 # matplot(obs_id, newpreds, type = c("l"), lwd = 1.5, col = 1:4, main = "predicton for new data at identical time grids")
@@ -2365,11 +2370,46 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, center = FALSE, random.int = FALSE,
 # matplot(obs_id, newpreds, type = c("l"), pch = 1, col = 1:4, main = "prediciton for new data at differnt time grids")
 # legend("topleft", legend = c("y.toy","pred_fpco", "pred_fpc"), col=1:4, lwd = 1.5 , cex = 0.7)
 # 
-# #methods of bfpco-based FDboost class
-# #<Fixed me > coef(m2) does not work because 'd' was not correctly computed by makeGrid function
-# #<Fixed me > plot(m2) does not work because the call of coef() function
+# ## Classfication application: Binomial
+# toydata$labels <-  cut(toydata$y.toy, breaks = c(0, 55, 100), labels = LETTERS[1:2])
 # 
-# ## Model performance over number of principal coordinates
+# binm1 <- FDboost(labels ~ bfpco(X.toy, s = s, distType = "dtw", pve = 0.9,
+#                                window.type="sakoechiba", window.size=5), 
+#                  timeformula = ~bols(1), 
+#                  data = toydata, 
+#                  family = Binomial(),
+#                  control = boost_control(mstop = 200)
+#                 )
+# 
+# # newdata the same as newdd
+# newdd = list(X.toy = Xnl + matrix(rnorm(30*101, 0, 0.05), 30), s = 1:101)
+# 
+# # prediction
+# pred_binm1 <- predict(binm1, newdata = newdd, type = "class")
+# 
+# # Multinomial classification
+# toydata$multilabels <-  cut(toydata$y.toy, breaks = c(0, 25,50,75,100), labels = LETTERS[1:4])
+# toydata$ydummy <- factor(levels(toydata$multilabels)[levels(toydata$multilabels) != "A"])
+# 
+# mulm1 <- FDboost(multilabels ~ bfpco(X.toy, s = s, distType = "dtw", pve = 0.9,
+#                                     window.type="sakoechiba", window.size=5)%O%
+#                                bols(ydummy, df = 4, contrasts.arg = "contr.dummy"), 
+#                 timeformula = ~bols(1), 
+#                 data = toydata, 
+#                 family = Multinomial(),
+#                 control = boost_control(mstop = 200)
+#                 )
+# 
+# # newdata the same as newdd
+# newdd2 = list(X.toy = Xnl + matrix(rnorm(30*101, 0, 0.05), 30), s = 1:101, ydummy = toydata$ydummy)
+# pred_mulm1 <- predict(mulm1, newdata = newdd2, type = "class")
+# 
+# 
+# methods of bfpco-based FDboost class
+# <Fixed me > coef(m2) does not work because 'd' was not correctly computed by makeGrid function
+# <Fixed me > plot(m2) does not work because the call of coef() function
+# 
+# # Model performance over number of principal coordinates
 # aveperf_fpco = sapply(1:15, FUN = function(i) {mean(
 #   FDboost(y.toy ~ bfpco(X.toy, s = s, distType = "dtw", npc = i,
 #                         window.type="sakoechiba", window.size=5), 
@@ -2381,11 +2421,18 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, center = FALSE, random.int = FALSE,
 #   FDboost(y.toy ~ bfpc(X.toy, s = s), timeformula = NULL, data = toydata)$resid()^2) }
 #   )
 # 
-# gcvdata <- data.frame(aveperf_fpco, aveperf_fpc)
+# aveperf_eucl = sapply(1:15, FUN = function(i) {mean(
+#   FDboost(y.toy ~ bfpco(X.toy, s = s, distType = "Euclidean", npc = i),
+#           timeformula = ~ bols(1), data = toydata, 
+#           control = boost_control(mstop = 1000))$resid()^2 ) }
+# )
+# 
+# gcvdata <- data.frame(aveperf_fpco, aveperf_fpc, aveperf_eucl)
 # matplot(1:15, gcvdata, type = "b", main = "model performance over number of pc/pco",
-#         xlab = "number of pc/pco", ylab = "GCV", pch = c(17,15))
-bfpco <- function(x, s, index = NULL, df = 4, lambda = NULL, pve = 0.99,
-                  npc = NULL, npc.max = 15, getEigen = TRUE, distType = "DTW",
+#         xlab = "number of pc/pco", ylab = "GCV", pch = c(17,15,16), col = c("red", "black", "green"))
+# legend("topright", legend = c("dtw_fpco", "fpc", "euclidean_fpco"), c(17,15,16), c("red", "black", "green"), cex = 0.5)
+bfpco <- function(x, s, index = NULL, df = 4, lambda = NULL, penalty = "identity",
+                  pve = 0.95, npc = NULL, npc.max = 15, getEigen = TRUE, distType = "Euclidean",
                   ...){
   
   if (!is.null(lambda)) df <- NULL
@@ -2426,6 +2473,7 @@ bfpco <- function(x, s, index = NULL, df = 4, lambda = NULL, pve = 0.99,
   ## the basis functions, based on FPCA
   temp <- X_fpco(mf, vary,
                  args = hyper_fpco(mf, vary, df = df, lambda = lambda,
+                                   penalty = penalty,
                                    pve = pve, npc = npc, npc.max = npc.max,
                                    s = s, distType = distType, ...))
   
@@ -2477,7 +2525,7 @@ bfpco <- function(x, s, index = NULL, df = 4, lambda = NULL, pve = 0.99,
   # Xnames : the name of pcos
   ret$dpp <- mboost_intern(ret, Xfun = X_fpco, args = temp$args, fun = "bl_lin")
   
-  
+ 
   rm(temp)
   
   return(ret)
