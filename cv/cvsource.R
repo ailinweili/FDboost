@@ -58,11 +58,11 @@ CVdata <- function(mydata, nfold, frac = 0.7, splitvclass = TRUE,
   if(sum(names(mydata) == "") > 0) stop("Unnamed variables are not allowed in mydata!")
   matnames <- names(mydata[which(typ %in% c("matrix"))])
   matnames <- matnames[!(matnames %in% nosplitvars)]
-  vecnames <- names(mydata[which(typ %in% c("character", "numeric","factor"))])
+  vecnames <- names(mydata[which(typ %in% c("character", "numeric","integer","factor"))])
   vecnames <- vecnames[!(vecnames %in% nosplitvars)]
-  if(length(which(!(typ %in% c("matrix", "character", "numeric", "factor")))) > 0){ 
+  if(length(which(!(typ %in% c("matrix", "character", "numeric","integer", "factor")))) > 0){ 
     stop("there are variables in 'mydata' which are not of the type 'matrix',
-         'character', 'numeric' or 'factor', such features can not be correctly 
+         'character', 'numeric','integer' or 'factor', such features can not be correctly 
          splitted into training and test data!")
   }
   
@@ -140,7 +140,7 @@ select_mstop <- function(funname = "FDboost", mdlargs, mstop_grid, B = 3,
 # returns fitted cross validation models, cvdata, selected iteration number and 
 # returns conditionally also accuracy(if ACC = TRUE).
 CVmodel <- function(funname = "FDboost", cvdata = NULL, mstop = NULL, smstop = FALSE, mstop_grid = NULL, B = NULL,
-                    mdlargs = NULL, response = "response", ACC = TRUE, pred_type = "class"){
+                    mdlargs = NULL, response = "response", ACC = FALSE, MSE = FALSE){
   if(!all.equal(names(cvdata), c("cvtrain", "cvtest")))
     stop("cvdata should contain a 'cvtrain' and a 'cvtest' list!")
   
@@ -159,11 +159,19 @@ CVmodel <- function(funname = "FDboost", cvdata = NULL, mstop = NULL, smstop = F
     accuracy <- unlist(lapply(seq_along(mdls), FUN = function(i){
       pred <- predict(mdls[[i]], 
                       newdata = cvdata$cvtest[[i]][which(names(cvdata$cvtest[[i]]) != response)], 
-                      type = pred_type)
+                      type = "class")
       sum(pred == cvdata$cvtest[[i]][[response]])/length(cvdata$cvtest[[i]][[response]])
     }))
   }
   
-  return(list(cvmdls = mdls, accuracy = if(ACC) accuracy, cvdata = cvdata, mstop = mstop))
+  if(MSE == TRUE){
+    mse <- unlist(lapply(seq_along(mdls), FUN = function(i){
+      pred <- predict(mdls[[i]], 
+                      newdata = cvdata$cvtest[[i]][which(names(cvdata$cvtest[[i]]) != response)]) 
+      sum((pred - cvdata$cvtest[[i]][[response]])^2)/length(cvdata$cvtest[[i]][[response]])
+    }))
+  }
+  
+  return(list(cvmdls = mdls, accuracy = if(ACC) accuracy, mse = if(MSE) mse, cvdata = cvdata, mstop = mstop))
 }
 

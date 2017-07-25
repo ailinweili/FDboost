@@ -2,80 +2,93 @@ library(foreign)
 library(FDboost)
 load("cvsource.R")
 
-# read data
-medgf1 <- read.arff("MedicalImages_TRAIN.arff")
-medgf2 <- read.arff("MedicalImages_TEST.arff")
-medgf3 <- rbind(medgf1, medgf2)
-set.seed(338)
-medgf <- medgf3[sample(nrow(medgf3), round(nrow(medgf3)*0.7), replace = FALSE), ]
+# preprocess dataset MedicalImages
+# medgf1 <- read.arff("MedicalImages_TRAIN.arff")
+# medgf2 <- read.arff("MedicalImages_TEST.arff")
+# medgf3 <- rbind(medgf1, medgf2)
+# medgf4 <- list(response = medgf3$target, func_x = as.matrix(medgf3[,-100]), x_index = as.numeric(1:99))
+# medgf4$rspdummy <- factor(levels(medgf4$response)[levels(medgf4$response) != 10])
+# set.seed(338)
+# medgf <- CVdata(medgf4, nfold = 1, frac = 0.8, splitvclass = TRUE, nosplitvars = c("x_index", "rspdummy"))
+# mymedgf <- medgf$cvtrain[[1]]
+# medgf_test <- medgf$cvtest[[1]]
+# mydata <- mymedgf
+# 
+# myresponse = "Multinomial"
 
-# preprocess data
-mymedgf <- list(response = medgf$target,intensity = as.matrix(medgf[,-100]), pixel = as.numeric(1:99))
-mymedgf$rspdummy <- factor(levels(mymedgf$response)[levels(mymedgf$response) != 10])
+# # preprocess dataset earthquake
+# earthquakes1 <- read.arff("Earthquakes_TRAIN.arff")
+# earthquakes2 <- read.arff("Earthquakes_TEST.arff")
+# earthquakes3 <- rbind(earthquakes1, earthquakes2)
+# earthquakes4 <- list(response = earthquakes3$target, func_x = as.matrix(earthquakes3[,which(colnames(earthquakes3)!="target")]), x_index = 1:512)
+# set.seed(1548)
+# earthquakes5 <- CVdata(earthquakes4, nfold = 1, frac = 0.8, splitvclass = FALSE, nosplitvars = c("x_index"))
+# myearthquake <- earthquakes5$cvtrain[[1]]
+# earthquake_test <- earthquakes5$cvtest[[1]]
+# mydata <- myearthquake
+# 
+# myresponse = "Numeric" 
+# 
+#
+# preprocess dataset fuelSubset
+data("fuelSubset")
+fuel1 <- list(response = fuelSubset$h2o, func_x = fuelSubset$NIR, x_index= fuelSubset$nir.lambda)
+set.seed(1548)
+fuel2 <- CVdata(fuel1, nfold = 1, frac = 0.8, splitvclass = FALSE, nosplitvars = c("x_index"))
+myfuel <- fuel2$cvtrain[[1]]
+fuel_test <- fuel2$cvtest[[1]]
+mydata <- myfuel
 
+myresponse = "Numeric" 
+
+# set paramters according to the type of target(you can change the value of parameters here!)
+if(myresponse == "Multinomial"){
+  set_splitvclass = TRUE # if TRUE, CVdata splits each class of response proportionally 
+  set_nosplitvars = c("x_index", "rspdummy") # the name of no-to-split variables for CVdata function
+  set_mstop_grid = c(100,1000,5000,10000,15000) # search grids of mstop parameter
+  set_ACC = TRUE;set_MSE = FALSE # if set_ACC = TRUE, compute accuracy, if set_MSE = TRUE, compute MSE
+  set_family = Multinomial();# distribution family of response, called by FDboost function 
+  set_timeformula = formula(~ bols(1)) # timeformula for scalar response, called by FDboost 
+  set_rspformula = "%O%bols(rspdummy, df = 4, contrasts.arg = 'contr.dummy')" # special formular for multinoimal response, called by FDboost
+}else{
+  set_splitvclass = FALSE; set_nosplitvars = c("x_index")
+  set_mstop_grid = c(1000,5000,10000,15000);set_ACC = FALSE;set_MSE = TRUE
+  set_family = Gaussian();set_timeformula = formula(~ bols(1))
+  set_rspformula = ""
+}
+
+# set hyper-paramters for cross validation (you can change the value of parameters here!)
+set_disttype = c("Minkowski","DTW") # set the distance types for cross validation
+set_window.type = c("none", "itakura", "sakoechiba") # set the dtw window types for cross validation
+set_window.size =  seq(30, 55, by = 5) # set the dtw window sizes for cross validation
+set_p = c(1,2,20) # set the Minkowski orders for cross validation
+set_penalty = c("identity", "inverse", "no") # set the penalty types for cross validation
+set_df = 4 # set the dfs for cross validation
+
+
+######Start from here, you can change the value of parameters if required ######
 # generate cross validation dataset
 set.seed(8384)
-cvdata <- CVdata(mymedgf, nfold = 10, frac = 0.8, splitvclass = TRUE, 
-                 response = "response", nosplitvars = c("pixel", "rspdummy"))
+cvdata <- CVdata(mydata, nfold = 10, frac = 0.8, splitvclass = set_splitvclass, 
+                 response = "response", nosplitvars =  set_nosplitvars)
+
 
 # set cv parameters for bfpco based FDboost
+## save fixed hyperparameters of CVmodel in a list
 cvpartargs <- list(funname = "FDboost",cvdata = cvdata, smstop = TRUE, 
-                   mstop_grid = c(100,1000,5000,10000,15000),B = 3, 
-                   response = "response", ACC = TRUE, pred_type = "class") # save fixed hyperparameter of CVmodel in a list
+                   mstop_grid = set_mstop_grid, B = 3, 
+                   response = "response", ACC = set_ACC, MSE = set_MSE) 
 
-fmdf <- expand.grid(baselearner = "bfpco",
-                    distType = c("Minkowski", "DTW"),
-                    window.type = c("none", "itakura", "sakoechiba"), 
-                    window.size = seq(30, 55, by = 5), 
-                    p = c(1,2,20),
-                    penalty = c("identity", "inverse", "no"), 
-                    df = 4)  ## save to be selected FDboost/bfpco hyperparameters in a big dataframe
+## save to be selected FDboost/bfpco hyperparameters in a big dataframe
+fmdf <- expand.grid(baselearner = "bfpco", distType = set_disttype,
+                    window.type = set_window.type, window.size = set_window.size, 
+                    p = set_p, penalty = set_penalty, df = set_df)  
 fmdf[fmdf$distType == "Minkowski", c("window.type","window.size")] = NA
 fmdf[fmdf$distType == "DTW", "p"] = NA 
 fmdf <- unique(fmdf)
-fmdf <- fmdf[order(fmdf$baselearner, fmdf$distType, fmdf$window.type, fmdf$window.size, fmdf$p, fmdf$penalty,fmdf$df), ]
-rownames(fmdf)  <- 1:nrow(fmdf)
+fmdf <- fmdf[order(fmdf$baselearner, fmdf$distType, fmdf$window.type, 
+                   fmdf$window.size, fmdf$p, fmdf$penalty,fmdf$df), ]
 
-FDboostargs <- list() ## a big list of FDboost/mboost args
-## set formula for Minkowski distance type 
-for( i in 1:9){
-  fm <- as.formula(paste("response ~ bfpco(x = intensity, s = pixel, pve = 0.95, 
-                         df = ", fmdf[i,]$df, 
-                         ", penalty = '", fmdf[i,]$penalty, 
-                         "', distType = '", fmdf[i,]$distType,
-                         "', p = ", fmdf[i,]$p, 
-                         ")%O%bols(rspdummy, df = 4, contrasts.arg = 'contr.dummy')", 
-                         sep = ""))
-  FDboostargs[[i]] <- list(formula = fm, timeformula = formula(~ bols(1)), family = Multinomial())
-}               
-## set formula for dtw distance type
-for( i in 10:nrow(fmdf)){
-  fm <- as.formula(paste("response ~ bfpco(x = intensity, s = pixel, pve = 0.95, 
-                         df = ", fmdf[i,]$df, 
-                         ", penalty = ' ", fmdf[i,]$penalty, 
-                         "', distType = '", fmdf[i,]$distType,
-                         "', window.type = '", fmdf[i,]$window.type,
-                         "', window.size = ", fmdf[i,]$window.size,
-                         ")%O%bols(rspdummy, df = 4, contrasts.arg = 'contr.dummy')", 
-                         sep = ""))
-  FDboostargs[[i]] <- list(formula = fm, timeformula = formula(~ bols(1)), family = Multinomial())
-} 
-
-names(FDboostargs) <- paste("bfpco_", 1:length(FDboostargs))
-
-# cv of bfpco based FDboost
-## minkowski model
-cvmink<- lapply(FDboostargs[4], FUN = function(x) {
-  do.call(CVmodel, args = c(cvpartargs, mdlargs = list(x)))})
-names(cvmink) = paste("mod", 1:9, sep = "")
-
-## dtw model
-cvdtw <- cvdtw <- lapply(FDboostargs[10:63], FUN = function(x) {
-  do.call(CVmodel, args = c(cvpartargs, mdlargs = list(x)))})
-names(cvdtw) = paste("mod", 10:63, sep = "")
-
-
-# cv of bfpc, bols, bsignal based FDboost
 # set cv parameters for bfpc, bols, bsignal based FDboost
 temp1 <- expand.grid(baselearner = c("bfpc","bols"),distType = NA,
                      window.type = NA, window.size = NA, p = NA,
@@ -88,74 +101,96 @@ temp2 <- expand.grid(baselearner = c("bsignal"),distType = NA,
                      p = NA,penalty = c("ps", "pss"), df = 4)
 temp2 <- temp2[order(temp2$baselearner, temp2$penalty, temp2$df), ]
 
+# combine cv parameters for all models
 fmdf <- rbind(fmdf, temp1, temp2)
 rownames(fmdf) <- 1:nrow(fmdf)
 
-## set formula of bfpc based FDboost
-for( i in 64:66){
-  fm <- as.formula(paste("response ~ bfpc(x = intensity, s = pixel, pve = 0.95, 
+
+#####Start from here, you should only make changes if indeedly necessary!#######
+## a big list of FDboost/mboost args
+FDboostargs <- list() 
+## set formula for Minkowski distance type 
+for( i in (index1 = which(fmdf$baselearner == "bfpco" & fmdf$distType == "Minkowski"))){
+  fm <- as.formula(paste("response ~ bfpco(x = func_x, s = x_index, pve = 0.95, 
                          df = ", fmdf[i,]$df, 
                          ", penalty = '", fmdf[i,]$penalty, 
-                         "')%O%bols(rspdummy, df = 4, contrasts.arg = 'contr.dummy')", 
+                         "', distType = '", fmdf[i,]$distType,
+                         "', p = ", fmdf[i,]$p, ")", set_rspformula,
                          sep = ""))
-  FDboostargs[[i]] <- list(formula = fm, timeformula = formula(~ bols(1)), family = Multinomial())
-  names(FDboostargs)[[i]] <- paste("bfpc_", i)
+  FDboostargs[[i]] <- list(formula = fm, timeformula = set_timeformula, family = set_family)
+}   
+
+## set formula for dtw distance type
+for( i in (index2 = which(fmdf$baselearner == "bfpco" & fmdf$distType == "DTW"))){
+  fm <- as.formula(paste("response ~ bfpco(x = func_x, s = x_index, pve = 0.95, 
+                         df = ", fmdf[i,]$df, 
+                         ", penalty = ' ", fmdf[i,]$penalty, 
+                         "', distType = '", fmdf[i,]$distType,
+                         "', window.type = '", fmdf[i,]$window.type,
+                         "', window.size = ", fmdf[i,]$window.size,
+                         ")", set_rspformula,sep = ""))
+  FDboostargs[[i]] <- list(formula = fm, timeformula = set_timeformula, family = set_family)
+} 
+
+## set formula of bfpc based FDboost
+for( i in (index3 = which(fmdf$baselearner == "bfpc"))){
+  fm <- as.formula(paste("response ~ bfpc(x = func_x, s = x_index, pve = 0.95, 
+                         df = ", fmdf[i,]$df, 
+                         ", penalty = '", fmdf[i,]$penalty, "')", set_rspformula,
+                         sep = ""))
+  FDboostargs[[i]] <- list(formula = fm, timeformula = set_timeformula, family = set_family)
 }               
 
 ## set formula of bols based FDboost
-for(i in 67){
+xname = paste("att", 1:ncol(mydata$func_x), sep = "")
+for(i in (index4 = which(fmdf$baselearner == "bols"))){
   fm <- as.formula(paste("response ~ ", 
-                         paste("bols(", xname, ", lambda = 0) %O% 
-                               bols(rspdummy,contrasts.arg = 'contr.dummy', lambda = 0)",
+                         paste("bols(", xname, ", lambda = 0)",set_rspformula,
                                collapse = " + ", sep = "")))
-  FDboostargs[[i]] <- list(formula = fm, timeformula = NA, family = Multinomial())
-  names(FDboostargs)[[i]] <- paste("bols_", i)
+  FDboostargs[[i]] <- list(formula = fm, timeformula = NA, family = set_family)
 }
 
 ## formula of bsignal based FDboost  
-for( i in 68:69){
-  fm <- as.formula(paste("response ~ bsignal(x = intensity, s = pixel, knots = 10,
-                         penalty = '", fmdf[i,]$penalty, "', center = TRUE) %O% 
-                         bols(rspdummy, df = 4,  contrasts.arg = 'contr.dummy')"))
-  FDboostargs[[i]] <- list(formula = fm, timeformula = formula(~ bols(1)), family = Multinomial())
-  names(FDboostargs)[[i]] <- paste("bsignal_", i)
+for( i in (index5 = which(fmdf$baselearner == "bsignal"))){
+  fm <- as.formula(paste("response ~ bsignal(x = func_x, s = x_index, knots = 10,
+                         penalty = '", fmdf[i,]$penalty, "', center = TRUE)", set_rspformula, 
+                         sep = ""))
+  FDboostargs[[i]] <- list(formula = fm, timeformula = set_timeformula, family = set_family)
 }
 
-# cv models
-## bfpc models
-cvbfpc <- lapply(FDboostargs[64:66], FUN = function(x) {
+## set name of FDboostargs
+names(FDboostargs) <- paste(fmdf$baselearner, 1:length(fmdf$baselearner), sep = "_")
+
+
+# cv of bfpco based FDboost
+## minkowski model
+cvmink<- lapply(FDboostargs[index1], FUN = function(x) {
   do.call(CVmodel, args = c(cvpartargs, mdlargs = list(x)))})
-names(cvbfpc) = paste("mod", 64:66, sep = "")
+names(cvmink) = paste("mod", index1, sep = "")
+
+## dtw model
+cvdtw <- lapply(FDboostargs[index2], FUN = function(x) {
+  do.call(CVmodel, args = c(cvpartargs, mdlargs = list(x)))})
+names(cvdtw) = paste("mod", index2, sep = "")
+
+## bfpc models
+cvbfpc <- lapply(FDboostargs[index3], FUN = function(x) {
+  do.call(CVmodel, args = c(cvpartargs, mdlargs = list(x)))})
+names(cvbfpc) = paste("mod", index3, sep = "")
 
 ## bols models
-xname = names(medgf[,-100])
 cvdata_bols <- lapply(cvdata, FUN = function(x){
-  lapply(x, FUN = function(y){ colnames(y$intensity) = xname;
-      y = c(y[names(y) != "intensity"], as.list(data.frame(y$intensity)))})})
+  lapply(x, FUN = function(y){ colnames(y$func_x) = xname;
+    y = c(y[names(y) != "func_x"], as.list(data.frame(y$func_x)))})})
 cvpartargs_bols <- cvpartargs;cvpartargs_bols$cvdata <- cvdata_bols;cvpartargs_bols$funname = "mboost"
-cvbols <- lapply(FDboostargs[67], FUN = function(x){
+cvbols <- lapply(FDboostargs[index4], FUN = function(x){
   do.call(CVmodel, args = c(cvpartargs_bols, mdlargs = list(x)))
 })
+names(cvbols) = names(cvbfpc) = paste("mod", index5, sep = "")
 
 ## bsignal models
-cvbsignal <- lapply(FDboostargs[68:69], FUN = function(x) {
+cvbsignal <- lapply(FDboostargs[index5], FUN = function(x) {
   do.call(CVmodel, args = c(cvpartargs, mdlargs = list(x)))})
-names(cvbfpc) = paste("mod", 68:69, sep = "")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+names(cvbfpc) = paste("mod", index5, sep = "")
 
 
