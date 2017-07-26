@@ -1,6 +1,9 @@
 library(foreign)
+library(devtools)
+source(file = "cvsource.R")
+
+install_git("git://github.com/ailinweili/FDboost.git", branch = "bfpco")
 library(FDboost)
-load("cvsource.R")
 
 # preprocess dataset MedicalImages
 # medgf1 <- read.arff("MedicalImages_TRAIN.arff")
@@ -8,24 +11,16 @@ load("cvsource.R")
 # medgf3 <- rbind(medgf1, medgf2)
 # medgf4 <- list(response = medgf3$target, func_x = as.matrix(medgf3[,-100]), x_index = as.numeric(1:99))
 # medgf4$rspdummy <- factor(levels(medgf4$response)[levels(medgf4$response) != 10])
-# set.seed(338)
-# medgf <- CVdata(medgf4, nfold = 1, frac = 0.8, splitvclass = TRUE, nosplitvars = c("x_index", "rspdummy"))
-# mymedgf <- medgf$cvtrain[[1]]
-# medgf_test <- medgf$cvtest[[1]]
-# mydata <- mymedgf
+# mydata <- medgf4
 # 
 # myresponse = "Multinomial"
-
+#
 # # preprocess dataset earthquake
 # earthquakes1 <- read.arff("Earthquakes_TRAIN.arff")
 # earthquakes2 <- read.arff("Earthquakes_TEST.arff")
 # earthquakes3 <- rbind(earthquakes1, earthquakes2)
 # earthquakes4 <- list(response = earthquakes3$target, func_x = as.matrix(earthquakes3[,which(colnames(earthquakes3)!="target")]), x_index = 1:512)
-# set.seed(1548)
-# earthquakes5 <- CVdata(earthquakes4, nfold = 1, frac = 0.8, splitvclass = FALSE, nosplitvars = c("x_index"))
-# myearthquake <- earthquakes5$cvtrain[[1]]
-# earthquake_test <- earthquakes5$cvtest[[1]]
-# mydata <- myearthquake
+# mydata <- earthquakes4
 # 
 # myresponse = "Numeric" 
 # 
@@ -33,11 +28,7 @@ load("cvsource.R")
 # preprocess dataset fuelSubset
 data("fuelSubset")
 fuel1 <- list(response = fuelSubset$h2o, func_x = fuelSubset$NIR, x_index= fuelSubset$nir.lambda)
-set.seed(1548)
-fuel2 <- CVdata(fuel1, nfold = 1, frac = 0.8, splitvclass = FALSE, nosplitvars = c("x_index"))
-myfuel <- fuel2$cvtrain[[1]]
-fuel_test <- fuel2$cvtest[[1]]
-mydata <- myfuel
+mydata <- fuel1
 
 myresponse = "Numeric" 
 
@@ -124,11 +115,11 @@ for( i in (index1 = which(fmdf$baselearner == "bfpco" & fmdf$distType == "Minkow
 for( i in (index2 = which(fmdf$baselearner == "bfpco" & fmdf$distType == "DTW"))){
   fm <- as.formula(paste("response ~ bfpco(x = func_x, s = x_index, pve = 0.95, 
                          df = ", fmdf[i,]$df, 
-                         ", penalty = ' ", fmdf[i,]$penalty, 
+                         ", penalty = '", fmdf[i,]$penalty, 
                          "', distType = '", fmdf[i,]$distType,
                          "', window.type = '", fmdf[i,]$window.type,
                          "', window.size = ", fmdf[i,]$window.size,
-                         ")", set_rspformula,sep = ""))
+                         ")", set_rspformula, sep = ""))
   FDboostargs[[i]] <- list(formula = fm, timeformula = set_timeformula, family = set_family)
 } 
 
@@ -192,5 +183,3 @@ names(cvbols) = names(cvbfpc) = paste("mod", index5, sep = "")
 cvbsignal <- lapply(FDboostargs[index5], FUN = function(x) {
   do.call(CVmodel, args = c(cvpartargs, mdlargs = list(x)))})
 names(cvbfpc) = paste("mod", index5, sep = "")
-
-
