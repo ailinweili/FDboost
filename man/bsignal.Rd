@@ -31,8 +31,8 @@ bfpc(x, s, index = NULL, df = 4, lambda = NULL, penalty = c("identity",
   getEigen = TRUE)
 
 bfpco(x, s, index = NULL, df = 4, lambda = NULL, penalty = "identity",
-  pve = 0.99, npc = NULL, npc.max = 15, getEigen = TRUE,
-  distType = "DTW", ...)
+  pve = 0.95, npc = NULL, npc.max = 15, getEigen = TRUE,
+  distType = "Euclidean", ...)
 }
 \arguments{
 \item{x}{matrix of functional variable x(s). The functional covariate has to be 

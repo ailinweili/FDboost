@@ -1,4 +1,3 @@
-
 #' Print and summary of a boosted functional regression model 
 #' 
 #' Takes a fitted \code{FDboost}-object and produces a print 

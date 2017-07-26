@@ -1811,10 +1811,10 @@ bfpc <- function(x, s, index = NULL, df = 4,
 
 ### hyper parameters for signal baselearner with eigenfunctions as bases, FPCO-based
 hyper_fpco <- function(mf, vary, df = 4, lambda = NULL,penalty = "identity",
-                       pve = 0.95, npc = NULL, npc.max = 15, getEigen=TRUE,
+                       pve = 0.95, npc = NULL, npc.max = 15, getEigen=TRUE, add = FALSE,
                        s=NULL, distType = "Euclidean", ...) {
   list(df = df, lambda = lambda, penalty = penalty, pve = pve, npc = npc, npc.max = npc.max,
-       getEigen = getEigen, s = s, prediction = FALSE, distType = distType, distparams = list(...))
+       getEigen = getEigen, add = add, s = s, prediction = FALSE, distType = distType, distparams = list(...))
 }
 
 
@@ -1872,18 +1872,10 @@ X_fpco <- function(mf, vary, args) {
   
   ## do FPCO on X1 
   if(is.null(args$klX)){
-    decomppars <- list(argvals = xind, distType = args$distType,
-                       pve = args$pve, npc = args$npc, npc.max = args$npc.max)
-    
-    # IS THERE ANY SMARTER WAY TO FIND DISTANCE ARGUMENTS
-    #ellipse_index <- which((names(args) %in% c("df","lambda","pve","npc",
-    #                                           "npc.max","getEigen","s",
-    #                                           "prediction", "distType")) 
-    #                       == FALSE)
+    decomppars <- list(argvals = xind, distType = args$distType, add = args$add,
+                       pve = args$pve, npc = args$npc, npc.max = args$npc.max, eig = args$getEigen)
 
-    
     decomppars <- c(decomppars, args$distparams)
-    #decomppars <- c(decomppars, dots)
     
     decomppars$Y <- X1
     
@@ -2133,7 +2125,7 @@ cmdscale_lanczos_new <- function(d, npc = NULL, pve = 0.95, npc.max = 15,
 
 ### FPCO by smooth centered dissimilarity matrix
 fpco.sc <- function(Y = NULL, Y.pred = NULL, center = FALSE, random.int = FALSE, nbasis = 10,
-                   argvals = NULL, distType = NULL, npc = NULL, npc.max = NULL, pve = 0.95, ...) {
+                   argvals = NULL, distType = NULL, add = FALSE, npc = NULL, npc.max = NULL, pve = 0.95, eig = TRUE, ...) {
   
   ## longer computation time due to dist function
   
@@ -2176,7 +2168,7 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, center = FALSE, random.int = FALSE,
   # modify cmdsclale_lanczos function from refund package
   # because cmdscale_lanczos does not allow to select pco by pve
   ll <- cmdscale_lanczos_new(d = Dist, npc = npc, npc.max = npc.max, pve = pve, 
-                               eig = TRUE, add = FALSE, x.ret = TRUE)
+                               eig = eig, add = add, x.ret = TRUE)
   
   points <- ll$points
   evalues <- ll$evalues
@@ -2245,7 +2237,7 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, center = FALSE, random.int = FALSE,
 # x = fuelSubset$UVVIS
 # s = fuelSubset$uvvis.lambda
 # 
-# bs1 <- bfpco(x, s, distType = "Euclidean") # class blg
+# bs1 <- bfpco(x, s,distType = "Euclidean") # class blg
 # bs2 <- bfpc(x, s)
 # 
 # bs1$model.frame() # 129*134
@@ -2284,7 +2276,7 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, center = FALSE, random.int = FALSE,
 # temp$Xnames
 #
 #
-### Comparison of bfpco based FDboost, bfpc based FDboost and pco based gam 
+# ### Comparison of bfpco based FDboost, bfpc based FDboost and pco based gam 
 # library(mgcv)
 # library(dtw)
 # library(refund)
@@ -2314,7 +2306,7 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, center = FALSE, random.int = FALSE,
 # matplot((0:100)/100, t(X.toy), type="l", lty=1, col=y.rainbow, xlab="t",
 #         ylab="", main="Rainbow plot")
 # 
-# Obtain DTW distances
+# # Obtain DTW distances
 # D.dtw <- dist(X.toy, method="dtw", window.type="sakoechiba", window.size=5)
 # 
 # # Model data
@@ -2341,7 +2333,7 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, center = FALSE, random.int = FALSE,
 # c(resid_pco = mean(m1$residuals^2), resid_fpco = mean(m2$resid()^2), resid_fpc = mean(m3$resid()^2))
 # 
 # 
-# ## Prediction for new data
+# # Prediction for new data
 # # Case when new data have the same time index
 # newdd = list(X.toy = Xnl + matrix(rnorm(30*101, 0, 0.05), 30), s = 1:101)
 # 
@@ -2414,25 +2406,24 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, center = FALSE, random.int = FALSE,
 #   FDboost(y.toy ~ bfpco(X.toy, s = s, distType = "dtw", npc = i,
 #                         window.type="sakoechiba", window.size=5), 
 #           timeformula = ~ bols(1), data = toydata, 
-#           control = boost_control(mstop = 1000))$resid()^2 ) }
-#   )
+#           control = boost_control(mstop = 1000))$resid()^2 ) })
 #   
 # aveperf_fpc = sapply(1:15, FUN = function(i) {mean(
-#   FDboost(y.toy ~ bfpc(X.toy, s = s), timeformula = NULL, data = toydata)$resid()^2) }
-#   )
+#   FDboost(y.toy ~ bfpc(X.toy, s = s, npc = i), timeformula = NULL, data = toydata,
+#           control = boost_control(mstop = 1000))$resid()^2)})
 # 
 # aveperf_eucl = sapply(1:15, FUN = function(i) {mean(
 #   FDboost(y.toy ~ bfpco(X.toy, s = s, distType = "Euclidean", npc = i),
 #           timeformula = ~ bols(1), data = toydata, 
-#           control = boost_control(mstop = 1000))$resid()^2 ) }
-# )
+#           control = boost_control(mstop = 1000))$resid()^2 ) } )
 # 
 # gcvdata <- data.frame(aveperf_fpco, aveperf_fpc, aveperf_eucl)
 # matplot(1:15, gcvdata, type = "b", main = "model performance over number of pc/pco",
 #         xlab = "number of pc/pco", ylab = "GCV", pch = c(17,15,16), col = c("red", "black", "green"))
 # legend("topright", legend = c("dtw_fpco", "fpc", "euclidean_fpco"), c(17,15,16), c("red", "black", "green"), cex = 0.5)
+
 bfpco <- function(x, s, index = NULL, df = 4, lambda = NULL, penalty = "identity",
-                  pve = 0.95, npc = NULL, npc.max = 15, getEigen = TRUE, distType = "Euclidean",
+                  pve = 0.95, npc = NULL, npc.max = 15, getEigen = TRUE, add = FALSE, distType = "Euclidean",
                   ...){
   
   if (!is.null(lambda)) df <- NULL
@@ -2475,7 +2466,7 @@ bfpco <- function(x, s, index = NULL, df = 4, lambda = NULL, penalty = "identity
                  args = hyper_fpco(mf, vary, df = df, lambda = lambda,
                                    penalty = penalty,
                                    pve = pve, npc = npc, npc.max = npc.max,
-                                   s = s, distType = distType, ...))
+                                   s = s, distType = distType, getEigen = getEigen, add = add, ...))
   
   # temp is a list of score, penalty matrix, and args
   ## save the FPCA in args
