@@ -5,32 +5,56 @@ source(file = "cvsource.R")
 install_git("git://github.com/ailinweili/FDboost.git", branch = "bfpco")
 library(FDboost)
 
-# preprocess dataset MedicalImages
-# medgf1 <- read.arff("MedicalImages_TRAIN.arff")
+
+# Import one of the following three datasets for modelling
+
+
+# dataset MedicalImages
+# Dataset is available at http://www.timeseriesclassification.com/description.php?Dataset=MedicalImages
+# MedicalImages dataset for multinomial classification. The dataset records the densitly of brightness
+# of a medical image, which presents one of 10 body organs. The dataset has scalar target as the name of 
+# body organ presented on a medical image, named as class1 to class 10; the dataset has a functional 
+# predictor, which records the brightness density of the mdedical image. Totally there are 1141 samples for modelling.
+#
+# medgf1 <- read.arff("MedicalImages_TRAIN.arff") 
 # medgf2 <- read.arff("MedicalImages_TEST.arff")
 # medgf3 <- rbind(medgf1, medgf2)
 # medgf4 <- list(response = medgf3$target, func_x = as.matrix(medgf3[,-100]), x_index = as.numeric(1:99))
 # medgf4$rspdummy <- factor(levels(medgf4$response)[levels(medgf4$response) != 10])
 # mydata <- medgf4
-# 
 # myresponse = "Multinomial"
+
+
+# dataset earthquake
+# data available at http://www.timeseriesclassification.com/description.php?Dataset=Earthquakes
+# The earthquake classification problem involves predicting whether a major event is about to 
+# occur based on the most recent reading data in the surrounding area. The data is taken from 
+# Northern California Earthquake Data Center and each data is an averaged reading for one hour.
+# A major event is defined as any reading of over 5 on the Rictor scale. To better distinguish aftershock
+# and a major earthquake, a positive case is considered to be one where a major event is not 
+# preceded by another major event for at least 512 hours. A negative case refers to instances 
+# where there is a reading below 4 that is preceded by at least 20 readings in the previous 512 hours
+# that are non-zero (to avoid trivial negative cases). 
+# Of the 86,066 hourly readings, 368 negative cases and 93 positive are available.
 #
-# # preprocess dataset earthquake
 # earthquakes1 <- read.arff("Earthquakes_TRAIN.arff")
 # earthquakes2 <- read.arff("Earthquakes_TEST.arff")
 # earthquakes3 <- rbind(earthquakes1, earthquakes2)
 # earthquakes4 <- list(response = earthquakes3$target, func_x = as.matrix(earthquakes3[,which(colnames(earthquakes3)!="target")]), x_index = 1:512)
 # mydata <- earthquakes4
-# 
 # myresponse = "Numeric" 
 # 
 #
-# preprocess dataset fuelSubset
-data("fuelSubset")
-fuel1 <- list(response = fuelSubset$h2o, func_x = fuelSubset$NIR, x_index= fuelSubset$nir.lambda)
-mydata <- fuel1
+# Dataset fuelSubset
+# Dataset fuelSubset consists of 129 laboratory samples of spectral Data of Fossil Fuels, and is provided in package FDboost.
+# We use h2o variable as scalar target, which records the humidity. For functional predictor, we use near infrared spectrum (NIR).  
+# measured at 231 wavelengths.
+# 
+# data("fuelSubset", package = "FDboost")
+# fuel1 <- list(response = fuelSubset$h2o, func_x = fuelSubset$NIR, x_index= fuelSubset$nir.lambda)
+# mydata <- fuel1
+# myresponse = "Numeric" 
 
-myresponse = "Numeric" 
 
 # set paramters according to the type of target(you can change the value of parameters here!)
 if(myresponse == "Multinomial"){

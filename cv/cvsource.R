@@ -5,9 +5,9 @@ get_index <- function(mydata, response = "response",
                       frac = 0.7, splitvclass = TRUE){
   # check response
   if(is.null(mydata[[response]]))
-    stop(paste(response, "is not a variable in mydata", sep = " "))
-  if(!(is.numeric(mydata[[response]]) | is.factor(mydata[[response]]) | is.character(mydata[[response]])))
-    stop(paste(response, "is not of type numeric, factor or character!", sep = " "))
+    stop(paste(response, "is not a valid variable name of mydata", sep = " "))
+  if(!(is.numeric(mydata[[response]]) | is.logical(mydata[[response]]) | is.factor(mydata[[response]])))
+    stop(paste(response, "is not scalar", sep = " "))
   
   # compute index for training set and test set according to the response data type
   if(is.numeric(mydata[[response]])){
@@ -17,7 +17,7 @@ get_index <- function(mydata, response = "response",
     test_index = setdiff(index, train_index)
   }
   
-  if(is.factor(mydata[[response]]) | is.character(mydata[[response]])){
+  if(is.factor(mydata[[response]]) | is.character(mydata[[response]]) | is.logical(mydata[[response]])){
     # split nominial response 
     if(splitvclass == FALSE){
       # split nominial response like splitting numeric response
@@ -54,15 +54,15 @@ CVdata <- function(mydata, nfold, frac = 0.7, splitvclass = TRUE,
   cvtest = vector("list", length = nfold)
   
   # distinguish 1 or 2 dimensional features
-  typ <- unlist(lapply(mydata, FUN = class))
+  typ <- unlist(lapply(mydata, FUN = class)) ## is.vector
   if(sum(names(mydata) == "") > 0) stop("Unnamed variables are not allowed in mydata!")
   matnames <- names(mydata[which(typ %in% c("matrix"))])
   matnames <- matnames[!(matnames %in% nosplitvars)]
-  vecnames <- names(mydata[which(typ %in% c("character", "numeric","integer","factor"))])
+  vecnames <- names(mydata[which(typ %in% c("character", "numeric","integer","factor", "logical"))])
   vecnames <- vecnames[!(vecnames %in% nosplitvars)]
-  if(length(which(!(typ %in% c("matrix", "character", "numeric","integer", "factor")))) > 0){ 
+  if(length(which(!(typ %in% c("matrix", "character", "numeric","integer", "factor","logical")))) > 0){ 
     stop("there are variables in 'mydata' which are not of the type 'matrix',
-         'character', 'numeric','integer' or 'factor', such features can not be correctly 
+         'character', 'numeric','integer', 'factor' or 'logical', such features can not be correctly 
          splitted into training and test data!")
   }
   
