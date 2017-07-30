@@ -111,8 +111,7 @@ CVdata <- function(mydata, nfold, frac = 0.7, splitvclass = TRUE,
 # and addargs are arguments to fit a single initiall model.The iteration of the model 
 # is then gridly increased until the best value for the number of iteration is found.
 select_mstop <- function(funname = "FDboost", mdlargs, mstop_grid, B = 3, 
-                         addargs = list(data = cvdata$cvtrain[[1]],
-                                        control = boost_control(mstop = 100))) {
+                         addargs = list(data = NULL,control = boost_control(mstop = 100))) {
   # build a single initial model
   smodel <- do.call(funname, args = c(mdlargs, addargs))
   
@@ -146,7 +145,9 @@ CVmodel <- function(funname = "FDboost", cvdata = NULL, mstop = NULL, smstop = F
   
   # compute the value of mstop if not given
   if(smstop | is.null(mstop)){
-    mstop <- select_mstop(funname = funname, mdlargs = mdlargs, mstop_grid = mstop_grid, B = B)
+    mstop <- select_mstop(funname = funname, mdlargs = mdlargs, mstop_grid = mstop_grid, B = B,
+                          addargs = list(data = cvdata$cvtrain[[1]],
+                                         control = boost_control(mstop = 100)))
   }
   
   # build models

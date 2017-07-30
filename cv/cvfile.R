@@ -1,12 +1,11 @@
 library(foreign)
 library(devtools)
-source(file = "cvsource.R")
-
 install_git("git://github.com/ailinweili/FDboost.git", branch = "bfpco")
 library(FDboost)
 
+source(file = "cvsource.R")
 
-# Import one of the following three datasets for modelling
+# Import only one of the following four datasets for modelling each time!!!
 
 
 # dataset MedicalImages
@@ -18,7 +17,7 @@ library(FDboost)
 #
 # medgf1 <- read.arff("MedicalImages_TRAIN.arff") 
 # medgf2 <- read.arff("MedicalImages_TEST.arff")
-# medgf3 <- rbind(medgf1, medgf2)
+# medgf3 <- rbind(medgf1, medgf2)[1:100,]
 # medgf4 <- list(response = medgf3$target, func_x = as.matrix(medgf3[,-100]), x_index = as.numeric(1:99))
 # medgf4$rspdummy <- factor(levels(medgf4$response)[levels(medgf4$response) != 10])
 # mydata <- medgf4
@@ -54,6 +53,13 @@ library(FDboost)
 # fuel1 <- list(response = fuelSubset$h2o, func_x = fuelSubset$NIR, x_index= fuelSubset$nir.lambda)
 # mydata <- fuel1
 # myresponse = "Numeric" 
+#
+#
+# small dataset as subset of fuelSubset to check correctness of this cvfile 
+# data("fuelSubset", package = "FDboost")
+# fuel2 <- list(response = fuelSubset$h2o, func_x = fuelSubset$NIR[, seq(1,231,by = 10)], x_index = 1:length(seq(1,231,by = 10)))
+# mydata <- fuel2
+# myresponse = "Numeric"
 
 
 # set paramters according to the type of target(you can change the value of parameters here!)
@@ -81,10 +87,11 @@ set_penalty = c("identity", "inverse", "no") # set the penalty types for cross v
 set_df = 4 # set the dfs for cross validation
 
 
-######Start from here, you can change the value of parameters if required ######
+######Start from here, you can change the value of parameters if necessary ######
 # generate cross validation dataset
 set.seed(8384)
-cvdata <- CVdata(mydata, nfold = 10, frac = 0.8, splitvclass = set_splitvclass, 
+nfold = 3
+cvdata <- CVdata(mydata, nfold = nfold, frac = 0.8, splitvclass = set_splitvclass, 
                  response = "response", nosplitvars =  set_nosplitvars)
 
 
@@ -157,12 +164,12 @@ for( i in (index3 = which(fmdf$baselearner == "bfpc"))){
 }               
 
 ## set formula of bols based FDboost
-xname = paste("att", 1:ncol(mydata$func_x), sep = "")
+xname <- paste("att", 1:ncol(mydata$func_x), sep = "")
 for(i in (index4 = which(fmdf$baselearner == "bols"))){
   fm <- as.formula(paste("response ~ ", 
-                         paste("bols(", xname, ", lambda = 0)",set_rspformula,
+                         paste("bols(", xname, ")",set_rspformula,
                                collapse = " + ", sep = "")))
-  FDboostargs[[i]] <- list(formula = fm, timeformula = NA, family = set_family)
+  FDboostargs[[i]] <- list(formula = fm, family = set_family)
 }
 
 ## formula of bsignal based FDboost  
@@ -175,6 +182,7 @@ for( i in (index5 = which(fmdf$baselearner == "bsignal"))){
 
 ## set name of FDboostargs
 names(FDboostargs) <- paste(fmdf$baselearner, 1:length(fmdf$baselearner), sep = "_")
+
 
 
 # cv of bfpco based FDboost
@@ -195,13 +203,14 @@ names(cvbfpc) = paste("mod", index3, sep = "")
 
 ## bols models
 cvdata_bols <- lapply(cvdata, FUN = function(x){
-  lapply(x, FUN = function(y){ colnames(y$func_x) = xname;
-    y = c(y[names(y) != "func_x"], as.list(data.frame(y$func_x)))})})
-cvpartargs_bols <- cvpartargs;cvpartargs_bols$cvdata <- cvdata_bols;cvpartargs_bols$funname = "mboost"
+    lapply(x, FUN = function(y){ colnames(y$func_x) = xname; 
+      y = c(y[!(names(y) %in% c("func_x", "x_index"))], as.list(data.frame(y$func_x)))})})
+cvpartargs_bols <- cvpartargs; cvpartargs_bols$cvdata <- cvdata_bols; cvpartargs_bols$funname = "mboost"
+
 cvbols <- lapply(FDboostargs[index4], FUN = function(x){
   do.call(CVmodel, args = c(cvpartargs_bols, mdlargs = list(x)))
 })
-names(cvbols) = names(cvbfpc) = paste("mod", index5, sep = "")
+names(cvbols) = names(cvbfpc) = paste("mod", index4, sep = "")
 
 ## bsignal models
 cvbsignal <- lapply(FDboostargs[index5], FUN = function(x) {
