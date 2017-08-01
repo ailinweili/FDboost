@@ -393,6 +393,10 @@ X_bsignal <- function(mf, vary, args) {
 #' supplied as n by <no. of evaluations> matrix, i.e., each row is one functional observation. 
 #' @param s vector for the index of the functional variable x(s) giving the 
 #' measurement points of the functional covariate. 
+#' @param d distance matrix consist of distance between each row of \code{x},
+#' \code{d} must be computed using the same distance type as \code{distType} 
+#' and potential distance parameters in \code{...}, so that when function \code{predict} is called,
+#' the same distance measure is applied for modelling data and new data. 
 #' @param time vector for the index of the functional response y(time) 
 #' giving the measurement points of the functional response. 
 #' @param index a vector of integers for expanding the covariate in \code{x} 
@@ -456,6 +460,9 @@ X_bsignal <- function(mf, vary, args) {
 #' @param distType only valid for \code{bfpco} base learner, it refers to type 
 #' of distance measrue, which is computed among data, the same as the method 
 #' paramter of \code{dist}
+#' @param add logical indicates if additive constant of Cailliez(1983) should be 
+#' added to distance matrix in order to realise euclidean representation of the 
+#' distance matrix. Default FALSE. 
 #' @param ... other paramater of distance measure as in \code{\link[proxy]{dist}} for \code{bfpco} base-learner
 #' 
 #' @aliases bconcurrent bhist bfpc bfpco
@@ -536,6 +543,8 @@ X_bsignal <- function(mf, vary, args) {
 #' 
 #' Scheipl, F. and Greven, S. (2016): Identifiability in penalized function-on-function regression models. 
 #' Electronic Journal of Statistics, 10(1), 495-526. 
+#' 
+#' Cailliez, Francis(1983): The analytical solution of the additive constant problem. Psychometrika,48(2),305--308.
 #'  
 #' @examples 
 #' ######## Example for scalar-on-function-regression with bsignal()  
@@ -1810,10 +1819,10 @@ bfpc <- function(x, s, index = NULL, df = 4,
 
 
 ### hyper parameters for signal baselearner with eigenfunctions as bases, FPCO-based
-hyper_fpco <- function(mf, vary, df = 4, lambda = NULL,penalty = "identity",
+hyper_fpco <- function(mf, d, vary, df = 4, lambda = NULL,penalty = "identity",
                        pve = 0.95, npc = NULL, npc.max = 15, getEigen=TRUE, add = FALSE,
                        s=NULL, distType = "Euclidean", ...) {
-  list(df = df, lambda = lambda, penalty = penalty, pve = pve, npc = npc, npc.max = npc.max,
+  list(d = d, df = df, lambda = lambda, penalty = penalty, pve = pve, npc = npc, npc.max = npc.max,
        getEigen = getEigen, add = add, s = s, prediction = FALSE, distType = distType, distparams = list(...))
 }
 
@@ -1872,7 +1881,7 @@ X_fpco <- function(mf, vary, args) {
   
   ## do FPCO on X1 
   if(is.null(args$klX)){
-    decomppars <- list(argvals = xind, distType = args$distType, add = args$add,
+    decomppars <- list(argvals = xind, Dist = args$d, distType = args$distType, add = args$add,
                        pve = args$pve, npc = args$npc, npc.max = args$npc.max, eig = args$getEigen)
 
     decomppars <- c(decomppars, args$distparams)
@@ -2124,7 +2133,7 @@ cmdscale_lanczos_new <- function(d, npc = NULL, pve = 0.95, npc.max = 15,
 
 
 ### FPCO by smooth centered dissimilarity matrix
-fpco.sc <- function(Y = NULL, Y.pred = NULL, center = FALSE, random.int = FALSE, nbasis = 10,
+fpco.sc <- function(Y = NULL, Y.pred = NULL, Dist = NULL, center = FALSE, random.int = FALSE, nbasis = 10,
                    argvals = NULL, distType = NULL, add = FALSE, npc = NULL, npc.max = NULL, pve = 0.95, eig = TRUE, ...) {
   
   ## longer computation time due to dist function
@@ -2159,11 +2168,13 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, center = FALSE, random.int = FALSE,
   
   # dissimilarity matrix
   # if single functional is presented
-  Dist <- dist(Y.tilde, method = distType, ...) 
-  Dist <- as.matrix(Dist)
-  
-  # if multivariate functionals are presented
-  
+  if(is.null(Dist)){
+    Dist <- dist(Y.tilde, method = distType, ...) 
+    Dist <- as.matrix(Dist)
+  }
+  if(!is.matrix(Dist)) {stop("The given Dist(distMatrix) is not a matrix!")}else{
+    if(ncol(Dist) != nrow(Y) | nrow(Dist) != nrow(Y) ) stop("The number of columns/rows of given Dist(distMatrix) is different from the number of rows of data!")
+  }
   
   # modify cmdsclale_lanczos function from refund package
   # because cmdscale_lanczos does not allow to select pco by pve
@@ -2223,7 +2234,7 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, center = FALSE, random.int = FALSE,
 ################################################################################
 #' FPCO base-learner 
 #' @import dtw
-#' @importFrom proxy dist
+#' @import proxy 
 #' @importFrom mgcv gam
 #' @importFrom gamm4 gamm4
 #' @export
@@ -2239,7 +2250,7 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, center = FALSE, random.int = FALSE,
 # 
 # bs1 <- bfpco(x, s,distType = "Euclidean") # class blg
 # bs2 <- bfpc(x, s)
-# 
+#
 # bs1$model.frame() # 129*134
 # bs2$model.frame()
 # all.equal(bs1$model.frame(), bs2$model.frame())
@@ -2375,7 +2386,7 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, center = FALSE, random.int = FALSE,
 # 
 # # newdata the same as newdd
 # newdd = list(X.toy = Xnl + matrix(rnorm(30*101, 0, 0.05), 30), s = 1:101)
-# 
+#
 # # prediction
 # pred_binm1 <- predict(binm1, newdata = newdd, type = "class")
 # 
@@ -2401,7 +2412,7 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, center = FALSE, random.int = FALSE,
 # <Fixed me > coef(m2) does not work because 'd' was not correctly computed by makeGrid function
 # <Fixed me > plot(m2) does not work because the call of coef() function
 # 
-# # Model performance over number of principal coordinates
+# Model performance over number of principal coordinates
 # aveperf_fpco = sapply(1:15, FUN = function(i) {mean(
 #   FDboost(y.toy ~ bfpco(X.toy, s = s, distType = "dtw", npc = i,
 #                         window.type="sakoechiba", window.size=5), 
@@ -2422,7 +2433,7 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, center = FALSE, random.int = FALSE,
 #         xlab = "number of pc/pco", ylab = "GCV", pch = c(17,15,16), col = c("red", "black", "green"))
 # legend("topright", legend = c("dtw_fpco", "fpc", "euclidean_fpco"), c(17,15,16), c("red", "black", "green"), cex = 0.5)
 
-bfpco <- function(x, s, index = NULL, df = 4, lambda = NULL, penalty = "identity",
+bfpco <- function(x, s, d = NULL, index = NULL, df = 4, lambda = NULL, penalty = "identity",
                   pve = 0.95, npc = NULL, npc.max = 15, getEigen = TRUE, add = FALSE, distType = "Euclidean",
                   ...){
   
@@ -2463,7 +2474,8 @@ bfpco <- function(x, s, index = NULL, df = 4, lambda = NULL, penalty = "identity
   ## call X_fpco in oder to compute parameter settings, e.g.
   ## the basis functions, based on FPCA
   temp <- X_fpco(mf, vary,
-                 args = hyper_fpco(mf, vary, df = df, lambda = lambda,
+                 args = hyper_fpco(mf, d = d, vary, 
+                                   df = df, lambda = lambda,
                                    penalty = penalty,
                                    pve = pve, npc = npc, npc.max = npc.max,
                                    s = s, distType = distType, getEigen = getEigen, add = add, ...))

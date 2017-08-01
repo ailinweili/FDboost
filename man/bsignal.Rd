@@ -30,9 +30,9 @@ bfpc(x, s, index = NULL, df = 4, lambda = NULL, penalty = c("identity",
   "inverse", "no"), pve = 0.99, npc = NULL, npc.max = 15,
   getEigen = TRUE)
 
-bfpco(x, s, index = NULL, df = 4, lambda = NULL, penalty = "identity",
-  pve = 0.95, npc = NULL, npc.max = 15, getEigen = TRUE,
-  distType = "Euclidean", ...)
+bfpco(x, s, d = NULL, index = NULL, df = 4, lambda = NULL,
+  penalty = "identity", pve = 0.95, npc = NULL, npc.max = 15,
+  getEigen = TRUE, add = FALSE, distType = "Euclidean", ...)
 }
 \arguments{
 \item{x}{matrix of functional variable x(s). The functional covariate has to be 
@@ -122,6 +122,15 @@ used to choose the number of functional principal components (FPCs).}
 \item{npc.max}{maximal number K of FPCs to use; defaults to 15.}
 
 \item{getEigen}{save the eigenvalues and eigenvectors, defaults to \code{TRUE}.}
+
+\item{d}{distance matrix consist of distance between each row of \code{x},
+\code{d} must be computed using the same distance type as \code{distType} 
+and potential distance parameters in \code{...}, so that when function \code{predict} is called,
+the same distance measure is applied for modelling data and new data.}
+
+\item{add}{logical indicates if additive constant of Cailliez(1983) should be 
+added to distance matrix in order to realise euclidean representation of the 
+distance matrix. Default FALSE.}
 
 \item{distType}{only valid for \code{bfpco} base learner, it refers to type 
 of distance measrue, which is computed among data, the same as the method 
@@ -315,7 +324,9 @@ Scheipl, F., Staicu, A.-M. and Greven, S. (2015):
 Functional Additive Mixed Models, Journal of Computational and Graphical Statistics, 24(2), 477-501. 
 
 Scheipl, F. and Greven, S. (2016): Identifiability in penalized function-on-function regression models. 
-Electronic Journal of Statistics, 10(1), 495-526.
+Electronic Journal of Statistics, 10(1), 495-526. 
+
+Cailliez, Francis(1983): The analytical solution of the additive constant problem. Psychometrika,48(2),305--308.
 }
 \seealso{
 \code{\link{FDboost}} for the model fit.
