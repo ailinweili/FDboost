@@ -2285,9 +2285,9 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, Dist = NULL, center = FALSE, random
 # temp$df()
 # # the names of PCOs
 # temp$Xnames
-
-
-### Comparison of bfpco based FDboost, bfpc based FDboost and pco based gam 
+# 
+# 
+# ### Comparison of bfpco based FDboost, bfpc based FDboost and pco based gam 
 # library(mgcv)
 # library(dtw)
 # library(refund)
