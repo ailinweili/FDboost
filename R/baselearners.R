@@ -1819,7 +1819,7 @@ bfpc <- function(x, s, index = NULL, df = 4,
 
 
 ### hyper parameters for signal baselearner with eigenfunctions as bases, FPCO-based
-hyper_fpco <- function(mf, d, vary, df = 4, lambda = NULL,penalty = "identity",
+hyper_fpco <- function(mf, d = NULL, vary, df = 4, lambda = NULL,penalty = "identity",
                        pve = 0.95, npc = NULL, npc.max = 15, getEigen=TRUE, add = FALSE,
                        s=NULL, distType = "Euclidean", ...) {
   list(d = d, df = df, lambda = lambda, penalty = penalty, pve = pve, npc = npc, npc.max = npc.max,
@@ -1834,7 +1834,7 @@ hyper_fpco <- function(mf, d, vary, df = 4, lambda = NULL,penalty = "identity",
 # 
 # mf = data.frame(fuelSubset$UVVIS)
 # vary = ""
-# args = hyper_fpco(mf, vary, npc = 5, npc.max = 15, s = fuelSubset$uvvis.lambda)
+# args = hyper_fpco(mf = mf, vary = vary, npc = 5, npc.max = 15, s = fuelSubset$uvvis.lambda)
 # 
 # # compute PCOs
 # res1 <- X_fpco(mf, vary, args)
@@ -1852,9 +1852,8 @@ hyper_fpco <- function(mf, d, vary, df = 4, lambda = NULL,penalty = "identity",
 # newdata = mf[1:50,] + matrix(rnorm(50*134,0,1), nrow = 50, ncol = 134)
 # res4 <- X_fpco(mf, vary, res3$args)
 # 
-# 
-# ## compute new PCOs with different signal index
-# # generat new data by take the first 100 rows of mf and the rowmeans of every 3 columns
+## compute new PCOs with different signal index
+# generat new data by take the first 100 rows of mf and the rowmeans of every 3 columns
 # newdata = data.frame(matrix(NA, ncol = 40, nrow = 100))
 # for( i in 1:40 ) 
 # newdata[,i] = rowMeans(mf[1:100, (3*i):(3*i+2)])
@@ -1909,7 +1908,7 @@ X_fpco <- function(mf, vary, args) {
     if(ncol(X1) == length(klX$mu) && all(args$s == xind)){
       # coordinate for the new data inserted into principal coordinate space
       # refer pco_predict_preprocess of refund package to add additive constant
-      Dist <- as.matrix(do.call(dist, c(list(rbind(klX$Y, X1), method = args$distType), args$distparams)))   # (n+nnew)*(n+nnew) 
+      Dist <- do.call(computeDistMat, c(list(rbind(klX$Y, X1), method = args$distType), args$distparams))   # (n+nnew)*(n+nnew) 
       N1 <- nrow(klX$Y)
       N2 <- nrow(X1)
       Dist <- Dist[1:N1, N1+(1:N2)] # n*nnew
@@ -1937,7 +1936,8 @@ X_fpco <- function(mf, vary, args) {
          for (i in 1:nrow(args$klX$Y))    
            approxY[i, ] <- approx(x = args$klX$xind, y = klX$Y[i,], xout = xind)$y
          
-        Dist <- as.matrix(do.call(dist, c(list(rbind(approxY, X1), method = args$distType), args$distparams)))
+        Dist <- do.call(computeDistMat, c(list(rbind(approxY, X1), method = args$distType), args$distparams))
+        #Dist <- as.matrix(do.call(dist, c(list(rbind(approxY, X1), method = args$distType), args$distparams)))
         N1 <- nrow(approxY)
         N2 <- nrow(X1)
         Dist <- Dist[1:N1, N1+(1:N2)] # n*nnew
@@ -2169,8 +2169,7 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, Dist = NULL, center = FALSE, random
   # dissimilarity matrix
   # if single functional is presented
   if(is.null(Dist)){
-    Dist <- dist(Y.tilde, method = distType, ...) 
-    Dist <- as.matrix(Dist)
+    Dist <- computeDistMat(Y.tilde, method = distType, ...) 
   }
   if(!is.matrix(Dist)) {stop("The given Dist(distMatrix) is not a matrix!")}else{
     if(ncol(Dist) != nrow(Y) | nrow(Dist) != nrow(Y) ) stop("The number of columns/rows of given Dist(distMatrix) is different from the number of rows of data!")
@@ -2232,9 +2231,10 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, Dist = NULL, center = FALSE, random
 
 
 ################################################################################
-#' FPCO base-learner 
-#' @import dtw
-#' @import proxy 
+#' FPCO base-learner
+#' @import proxy
+#' @import classiFunc
+#' @importFrom dtw dtw 
 #' @importFrom mgcv gam
 #' @importFrom gamm4 gamm4
 #' @export
@@ -2248,9 +2248,9 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, Dist = NULL, center = FALSE, random
 # x = fuelSubset$UVVIS
 # s = fuelSubset$uvvis.lambda
 # 
-# bs1 <- bfpco(x, s,distType = "Euclidean") # class blg
+# bs1 <- bfpco(x, s, distType = "Euclidean") # class blg
 # bs2 <- bfpc(x, s)
-#
+# 
 # bs1$model.frame() # 129*134
 # bs2$model.frame()
 # all.equal(bs1$model.frame(), bs2$model.frame())
@@ -2285,9 +2285,9 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, Dist = NULL, center = FALSE, random
 # temp$df()
 # # the names of PCOs
 # temp$Xnames
-#
-#
-# ### Comparison of bfpco based FDboost, bfpc based FDboost and pco based gam 
+
+
+### Comparison of bfpco based FDboost, bfpc based FDboost and pco based gam 
 # library(mgcv)
 # library(dtw)
 # library(refund)
