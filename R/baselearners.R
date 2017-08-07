@@ -1833,6 +1833,7 @@ hyper_fpco <- function(mf, d = NULL, vary, df = 4, lambda = NULL,penalty = "iden
 # data("fuelSubset")
 # 
 # mf = data.frame(fuelSubset$UVVIS)
+# names(mf) <- NULL
 # vary = ""
 # args = hyper_fpco(mf = mf, vary = vary, npc = 5, npc.max = 15, s = fuelSubset$uvvis.lambda)
 # 
@@ -1849,11 +1850,13 @@ hyper_fpco <- function(mf, d = NULL, vary, df = 4, lambda = NULL,penalty = "iden
 # # compute PCOs
 # res3 <- X_fpco(mf, vary, args)
 # # compute PCOs for new data points
-# newdata = mf[1:50,] + matrix(rnorm(50*134,0,1), nrow = 50, ncol = 134)
-# res4 <- X_fpco(mf, vary, res3$args)
+# newdata = as.matrix(mf[1:50,]) + matrix(rnorm(50*134,0,1), nrow = 50, ncol = 134)
+# newdata <- as.data.frame(newdata)
+# names(newdata) <- NULL
+# res4 <- X_fpco(mf = newdata, vary, res3$args) # ncol(res4$X) = npc
 # 
-## compute new PCOs with different signal index
-# generat new data by take the first 100 rows of mf and the rowmeans of every 3 columns
+# # compute new PCOs with different signal index
+# # generat new data by take the first 100 rows of mf and the rowmeans of every 3 columns
 # newdata = data.frame(matrix(NA, ncol = 40, nrow = 100))
 # for( i in 1:40 ) 
 # newdata[,i] = rowMeans(mf[1:100, (3*i):(3*i+2)])
@@ -1862,8 +1865,9 @@ hyper_fpco <- function(mf, d = NULL, vary, df = 4, lambda = NULL,penalty = "iden
 # newindex[i] = mean(fuelSubset$uvvis.lambda[(3*i):(3*i+2)])
 # attr(newdata[[1]], "signalIndex") <- newindex 
 # <Fix me > why use first term of a dataframe
+# names(newdata) <- NULL
 # res5 <- X_fpco(mf = newdata, vary, res3$args)
-# newpcos <- res5$X
+# newpcos <- res5$X # ncol(res5$X) = npc
 
 X_fpco <- function(mf, vary, args) {
   
@@ -1903,20 +1907,26 @@ X_fpco <- function(mf, vary, args) {
     ## scores can be computed as \xi_{ik}=\int X1cen_i(s) \phi_k(s) ds
   }else{
     klX <- args$klX
-    X <- args$klX$points
+    # X <- args$klX$points
     ## compute scores on new X1 observations
     if(ncol(X1) == length(klX$mu) && all(args$s == xind)){
       # coordinate for the new data inserted into principal coordinate space
       # refer pco_predict_preprocess of refund package to add additive constant
-      Dist <- do.call(computeDistMat, c(list(rbind(klX$Y, X1), method = args$distType), args$distparams))   # (n+nnew)*(n+nnew) 
-      N1 <- nrow(klX$Y)
-      N2 <- nrow(X1)
-      Dist <- Dist[1:N1, N1+(1:N2)] # n*nnew
+      if(args$distType %in% c("dtw")){
+        Dist <- do.call(computeDistMat, c(list(x = klX$Y, y = X1, metric = args$distType), args$distparams)) # n*nnew
+        #Dist <- do.call(computeDistMat,c(list(rbind(klX$Y, X1), metric = args$distType), args$distparams))  # (n+nnew)*(n+nnew) 
+      }else{
+        Dist <- do.call(computeDistMat, c(list(x = klX$Y, y = X1, method = args$distType), args$distparams)) # n*nnew
+        #Dist <- do.call(computeDistMat, c(list(rbind(klX$Y, X1), method = args$distType), args$distparams))   # (n+nnew)*(n+nnew) 
+      }
+      #N1 <- nrow(klX$Y)
+      #N2 <- nrow(X1)
+      #Dist <- Dist[1:N1, N1+(1:N2)] # n*nnew
       non.diag <- row(Dist) != col(Dist) # 
       Dist[non.diag] <- (Dist[non.diag] + klX$ac)
       
       B <- klX$B
-      d <- diag(B) - (Dist^2)  # d = d_(i)^2 - d_(i,new)^2 = b_(ii) - d_(i,new)^2
+      d <- -((Dist^2) -diag(B))  # d = d_(i)^2 - d_(i,new)^2 = b_(ii) - d_(i,new)^2
       
       # get inverse eigen matrix
       ev <- klX$evalues[1:ncol(klX$points)]
@@ -1935,17 +1945,23 @@ X_fpco <- function(mf, vary, args) {
         approxY <- matrix(NA, nrow = nrow(args$klX$Y), ncol = length(xind))
          for (i in 1:nrow(args$klX$Y))    
            approxY[i, ] <- approx(x = args$klX$xind, y = klX$Y[i,], xout = xind)$y
-         
-        Dist <- do.call(computeDistMat, c(list(rbind(approxY, X1), method = args$distType), args$distparams))
+        
+       if(args$distType %in% c("dtw")){
+          Dist <- do.call(computeDistMat, c(list(x = approxY, y = X1, metric = args$distType), args$distparams)) # n*nnew
+          #Dist <- do.call(computeDistMat,c(list(rbind(approxY, X1), metric = args$distType), args$distparams))  # (n+nnew)*(n+nnew) 
+        }else{
+          Dist <- do.call(computeDistMat, c(list(x = approxY, y = X1, method = args$distType), args$distparams)) # n*nnew
+          #Dist <- do.call(computeDistMat, c(list(rbind(approxY, X1), method = args$distType), args$distparams))
+        }
         #Dist <- as.matrix(do.call(dist, c(list(rbind(approxY, X1), method = args$distType), args$distparams)))
-        N1 <- nrow(approxY)
-        N2 <- nrow(X1)
-        Dist <- Dist[1:N1, N1+(1:N2)] # n*nnew
+        #N1 <- nrow(approxY)
+        #N2 <- nrow(X1)
+        #Dist <- Dist[1:N1, N1+(1:N2)] # n*nnew
         non.diag <- row(Dist) != col(Dist) # 
         Dist[non.diag] <- (Dist[non.diag] + klX$ac) # is the ac appropriate when grided? is ac only distance related?
          
         B <- klX$B
-        d <- diag(B) - (Dist^2)  # d = d_(i)^2 - d_(i,new)^2 = b_(ii) - d_(i,new)^2
+        d <- -((Dist^2) - diag(B))  # d = d_(i)^2 - d_(i,new)^2 = b_(ii) - d_(i,new)^2
          
         # get inverse eigen matrix
         ev <- klX$evalues[1:ncol(klX$points)]
@@ -2169,7 +2185,11 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, Dist = NULL, center = FALSE, random
   # dissimilarity matrix
   # if single functional is presented
   if(is.null(Dist)){
-    Dist <- computeDistMat(Y.tilde, method = distType, ...) 
+    if(distType %in% c("dtw")){
+      Dist <- computeDistMat(Y.tilde, metric = distType, ...)
+    }else{
+      Dist <- computeDistMat(Y.tilde, method = distType, ...) 
+    }
   }
   if(!is.matrix(Dist)) {stop("The given Dist(distMatrix) is not a matrix!")}else{
     if(ncol(Dist) != nrow(Y) | nrow(Dist) != nrow(Y) ) stop("The number of columns/rows of given Dist(distMatrix) is different from the number of rows of data!")
@@ -2346,9 +2366,9 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, Dist = NULL, center = FALSE, random
 # 
 # # Prediction for new data
 # # Case when new data have the same time index
-# newdd = list(X.toy = Xnl + matrix(rnorm(30*101, 0, 0.05), 30), s = 1:101)
-# 
-# newpred_m2 = predict(m2, newdata = newdd)
+newdd = list(X.toy = Xnl + matrix(rnorm(30*101, 0, 0.05), 30), s = 1:101)
+
+newpred_m2 = predict(m2, newdata = newdd)
 # newpred_m3 = predict(m3, newdata = newdd)
 # newpreds = data.frame(y.toy = toydata$y.toy, pred_fpco = newpred_m2, pred_fpc = newpred_m3)
 # 
@@ -2356,17 +2376,17 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, Dist = NULL, center = FALSE, random
 # legend("topleft", legend = c("y.toy","pred_fpco", "pred_fpc"), col=1:4, lwd = 1.5, cex = 0.7)
 # 
 # # Case when new data have different time index
-# new_xtoy = data.frame()
-# for( i in 1:32 ) 
-#   new_xtoy[1:nrow(X.toy),i] = rowMeans(X.toy[1:nrow(X.toy), (3*i):(3*i+2)])
-# 
-# new_s = vector()
-# for(i in 1:32) 
-#   new_s[i] = mean(newdd$s[(3*i):(3*i+2)])
-# 
-# newdd_2 = list(X.toy = as.matrix(new_xtoy), s = as.integer(new_s))
-# 
-# newpred2_m2 = predict(m2, newdata = newdd_2)
+new_xtoy = data.frame()
+for( i in 1:32 ) 
+  new_xtoy[1:nrow(X.toy),i] = rowMeans(X.toy[1:nrow(X.toy), (3*i):(3*i+2)])
+
+new_s = vector()
+for(i in 1:32) 
+  new_s[i] = mean(newdd$s[(3*i):(3*i+2)])
+
+newdd_2 = list(X.toy = as.matrix(new_xtoy), s = as.integer(new_s))
+
+newpred2_m2 = predict(m2, newdata = newdd_2)
 # newpred2_m3 = predict(m3, newdata = newdd_2) 
 # newpreds2 = data.frame(y.toy = toydata$y.toy, pred_fpco = newpred2_m2, newpred_fpc = newpred2_m3)
 # 
