@@ -2329,7 +2329,7 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, Dist = NULL, center = FALSE, random
 # m2 <- FDboost(y.toy ~ bfpco(X.toy, s = s, distType = "dtw", pve = 0.99,
 #                            window.type="sakoechiba", window.size=5), 
 #              timeformula = NULL, data = toydata, control = boost_control(mstop = 200))
-#  
+# 
 # m3 <- FDboost(y.toy ~ bfpc(X.toy, s = s), timeformula = NULL, data = toydata)  
 # 
 # # Model fitted values
@@ -2474,7 +2474,7 @@ bfpco <- function(x, s, d = NULL, index = NULL, df = 4, lambda = NULL, penalty =
   ## call X_fpco in oder to compute parameter settings, e.g.
   ## the basis functions, based on FPCA
   temp <- X_fpco(mf, vary,
-                 args = hyper_fpco(mf, d = d, vary, 
+                 args = hyper_fpco(mf, d = d, vary = vary, 
                                    df = df, lambda = lambda,
                                    penalty = penalty,
                                    pve = pve, npc = npc, npc.max = npc.max,
