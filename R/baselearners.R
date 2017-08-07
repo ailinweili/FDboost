@@ -1914,14 +1914,9 @@ X_fpco <- function(mf, vary, args) {
       # refer pco_predict_preprocess of refund package to add additive constant
       if(args$distType %in% c("dtw")){
         Dist <- do.call(computeDistMat, c(list(x = klX$Y, y = X1, metric = args$distType), args$distparams)) # n*nnew
-        #Dist <- do.call(computeDistMat,c(list(rbind(klX$Y, X1), metric = args$distType), args$distparams))  # (n+nnew)*(n+nnew) 
       }else{
         Dist <- do.call(computeDistMat, c(list(x = klX$Y, y = X1, method = args$distType), args$distparams)) # n*nnew
-        #Dist <- do.call(computeDistMat, c(list(rbind(klX$Y, X1), method = args$distType), args$distparams))   # (n+nnew)*(n+nnew) 
       }
-      #N1 <- nrow(klX$Y)
-      #N2 <- nrow(X1)
-      #Dist <- Dist[1:N1, N1+(1:N2)] # n*nnew
       non.diag <- row(Dist) != col(Dist) # 
       Dist[non.diag] <- (Dist[non.diag] + klX$ac)
       
@@ -1948,15 +1943,9 @@ X_fpco <- function(mf, vary, args) {
         
        if(args$distType %in% c("dtw")){
           Dist <- do.call(computeDistMat, c(list(x = approxY, y = X1, metric = args$distType), args$distparams)) # n*nnew
-          #Dist <- do.call(computeDistMat,c(list(rbind(approxY, X1), metric = args$distType), args$distparams))  # (n+nnew)*(n+nnew) 
         }else{
           Dist <- do.call(computeDistMat, c(list(x = approxY, y = X1, method = args$distType), args$distparams)) # n*nnew
-          #Dist <- do.call(computeDistMat, c(list(rbind(approxY, X1), method = args$distType), args$distparams))
         }
-        #Dist <- as.matrix(do.call(dist, c(list(rbind(approxY, X1), method = args$distType), args$distparams)))
-        #N1 <- nrow(approxY)
-        #N2 <- nrow(X1)
-        #Dist <- Dist[1:N1, N1+(1:N2)] # n*nnew
         non.diag <- row(Dist) != col(Dist) # 
         Dist[non.diag] <- (Dist[non.diag] + klX$ac) # is the ac appropriate when grided? is ac only distance related?
          
@@ -2170,9 +2159,9 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, Dist = NULL, center = FALSE, random
   if (center) {
     if (random.int) {
       ri_data <- data.frame(y = as.vector(Y), d.vec = d.vec, id = factor(id))
-      gam0 = gamm4(y ~ s(d.vec, k = nbasis), random = ~(1 | id), data = ri_data)$gam
+      gam0 = gamm4::gamm4(y ~ s(d.vec, k = nbasis), random = ~(1 | id), data = ri_data)$gam
       rm(ri_data)
-    } else gam0 = gam(as.vector(Y) ~ s(d.vec, k = nbasis))
+    } else gam0 = mgcv::gam(as.vector(Y) ~ s(d.vec, k = nbasis))
     mu = predict(gam0, newdata = data.frame(d.vec = argvals))
     Y.tilde = Y - matrix(mu, I, D, byrow = TRUE)
   } else { 
@@ -2252,11 +2241,7 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, Dist = NULL, center = FALSE, random
 
 ################################################################################
 #' FPCO base-learner
-#' @import proxy
-#' @import classiFunc
-#' @importFrom dtw dtw 
-#' @importFrom mgcv gam
-#' @importFrom gamm4 gamm4
+#' @importFrom classiFunc computeDistMat
 #' @export
 #' @rdname bsignal
 # ## functional principal coordinates base learner 
@@ -2366,9 +2351,9 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, Dist = NULL, center = FALSE, random
 # 
 # # Prediction for new data
 # # Case when new data have the same time index
-newdd = list(X.toy = Xnl + matrix(rnorm(30*101, 0, 0.05), 30), s = 1:101)
-
-newpred_m2 = predict(m2, newdata = newdd)
+# newdd = list(X.toy = Xnl + matrix(rnorm(30*101, 0, 0.05), 30), s = 1:101)
+# 
+# newpred_m2 = predict(m2, newdata = newdd)
 # newpred_m3 = predict(m3, newdata = newdd)
 # newpreds = data.frame(y.toy = toydata$y.toy, pred_fpco = newpred_m2, pred_fpc = newpred_m3)
 # 
@@ -2376,17 +2361,17 @@ newpred_m2 = predict(m2, newdata = newdd)
 # legend("topleft", legend = c("y.toy","pred_fpco", "pred_fpc"), col=1:4, lwd = 1.5, cex = 0.7)
 # 
 # # Case when new data have different time index
-new_xtoy = data.frame()
-for( i in 1:32 ) 
-  new_xtoy[1:nrow(X.toy),i] = rowMeans(X.toy[1:nrow(X.toy), (3*i):(3*i+2)])
-
-new_s = vector()
-for(i in 1:32) 
-  new_s[i] = mean(newdd$s[(3*i):(3*i+2)])
-
-newdd_2 = list(X.toy = as.matrix(new_xtoy), s = as.integer(new_s))
-
-newpred2_m2 = predict(m2, newdata = newdd_2)
+# new_xtoy = data.frame()
+# for( i in 1:32 ) 
+#   new_xtoy[1:nrow(X.toy),i] = rowMeans(X.toy[1:nrow(X.toy), (3*i):(3*i+2)])
+# 
+# new_s = vector()
+# for(i in 1:32) 
+#   new_s[i] = mean(newdd$s[(3*i):(3*i+2)])
+# 
+# newdd_2 = list(X.toy = as.matrix(new_xtoy), s = as.integer(new_s))
+# 
+# newpred2_m2 = predict(m2, newdata = newdd_2)
 # newpred2_m3 = predict(m3, newdata = newdd_2) 
 # newpreds2 = data.frame(y.toy = toydata$y.toy, pred_fpco = newpred2_m2, newpred_fpc = newpred2_m3)
 # 
