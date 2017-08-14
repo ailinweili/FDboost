@@ -10,18 +10,21 @@ cv.wrap.func <- function(data, train_index, use.method, cvparam, mparam){
   validdata <- lapply(train_index, FUN = function(m) list(y = data$y[-m], x = data$x[-m,], s = data$s))
   
   # generate a dataframe of cv hyperparameters for each use.method
+  # deal with cvparam = NULL
   cvparam.df <- lapply(cvparam, FUN = function(x) unique(expand.grid(x, stringsAsFactors = FALSE)))
   names(cvparam.df)  <- paste(use.method, ".cvparam", sep = "")
+  print(cvparam.df)
   
   res <- list()
   cvparam.new <- list()
   for( i in 1:length(cvparam.df)){
     
-    if(use.method[i] %in% paste("wrap.", "FDboost.", "fpco.", c("minkowski","dtw","correlation"), sep = "")){
+    if(use.method[i] %in% paste("wrap.", "FDboost.", "fpco.", c("minkowski","dtw","correlation","elasticMetric"), sep = "")){
       
       if(use.method[i] == "wrap.FDboost.fpco.minkowski") cvparam.1 <- list(distType = cvparam.df[[i]]$distType, p = as.numeric(cvparam.df[[i]]$p))
       if(use.method[i] == "wrap.FDboost.fpco.dtw") cvparam.1 <- list(distType = cvparam.df[[i]]$distType,  window.type = cvparam.df[[i]]$window.type, window.size = cvparam[[i]]$window.size)
-      if(use.method[i] == "wrap.FDboost.fpco.correlation") cvparam.1 <- list(distType = cvparam.df[[i]]$distType, p = cvparam.df[[i]]$p)
+      if(use.method[i] == "wrap.FDboost.fpco.correlation") cvparam.1 <- list(distType = cvparam.df[[i]]$distType)
+      if(use.method[i] == "wrap.FDboost.fpco.elasticMetric") cvparam.1 <- list(distType = cvparam.df[[i]]$distType)
       cvparam.1 <- cvparam.1[sapply(1:length(cvparam.1), FUN = function(k){!is.null(cvparam.1[[k]])})]
       
       ## run here gives warning can not find object lambda
@@ -32,12 +35,16 @@ cv.wrap.func <- function(data, train_index, use.method, cvparam, mparam){
       names(res[[i]]) <- paste("cvparam.new.row", 1:nrow(cvparam.new[[i]]), sep = "")
       names(cvparam.new)[i] <- use.method[i]
     }else{
-      cvparam.df[[i]]$mstop <- select_mstop(smodel = do.call(use.method[i], args = list(data = traindata[[1]], cvparam = cvparam.df[i], mparam <- mparam, select = TRUE)))
-      res[[i]] <- lapply(1:length(traindata), FUN = function(k) {do.call(use.method[i], 
-              args = list(data = traindata[[k]], newdata = validdata[[k]], cvparam = cvparam.df[i], mparam = mparam, select = FALSE))})
-      cvparam.new[[i]] <- cvparam.df[[i]]
+      cvparam.df[[i]]$mstop <- rep(100, length = nrow(cvparam.df[[i]]))
+      for( j in 1:nrow(cvparam.df[[i]])){
+        cvparam.df[[i]]$mstop[j] <- select_mstop(smodel = do.call(use.method[i], args = list(data = traindata[[1]], cvparam = list(cvparam.df[[i]][j,]), mparam <- mparam, select = TRUE)))
+        res[[i]][[j]] <- lapply(1:length(traindata), FUN = function(k) {do.call(use.method[i], 
+            args = list(data = traindata[[k]], newdata = validdata[[k]], cvparam = list(cvparam.df[[i]][j,]), mparam = mparam, select = FALSE))})
+        names(res[[i]][[j]]) <- paste("cvdata", 1:length(traindata), sep = "")
+      }
       names(res)[i] <- use.method[i]
-      names(res[[i]]) <- paste("cvparam.new.row.", 1:nrow(cvparam.new[[i]]), sep = "")
+      names(res[[i]]) <- paste("cvparam.new.row", 1:nrow(cvparam.new[[i]]), sep = "")
+      cvparam.new[[i]] <- cvparam.df[[i]]
       names(cvparam.new)[i] <- use.method[i]
     }
   }
@@ -54,9 +61,12 @@ cv.wrap.fpco <- function(traindata, validdata, cvparam, distparam, mparam, use.m
   # compute distance matrix for each distance measure and each training data
   d <- list(list())
   for(i in 1:nrow(dist.combi)){
+    # if distType = "dtw", metric rather than method should be used!!!
     d[[i]] <- lapply(traindata, FUN = function(dd) {
-      do.call(computeDistMat, args = c(list(x = dd$x, method = dist.combi$distType[i]), 
-                                       as.list(dist.combi[i, ][names(dist.combi) != "distType"])))})
+      do.call(computeDistMat, args = c(list(x = dd$x, 
+                  method = if(dist.combi$distType[i] == "dtw") {"custom.metric"} else {dist.combi$distType[i]},
+                  custom.metric = if(dist.combi$distType[i] == "dtw") {proxy::pr_DB$get_entry("dtw")$FUN} else {NULL}),
+                as.list(dist.combi[i, ][names(dist.combi) != "distType"])))})
     names(d[[i]]) <- paste("traindata", 1:length(traindata), sep = "")
   }
   
@@ -64,8 +74,10 @@ cv.wrap.fpco <- function(traindata, validdata, cvparam, distparam, mparam, use.m
   dnew <- list(list()) 
   for(i in 1:nrow(dist.combi)){
     dnew[[i]] <- lapply(1:length(validdata), FUN = function(k) {
-      do.call(computeDistMat, args = c(list(x = rbind(traindata[[k]]$x, validdata[[k]]$x), method = dist.combi$distType[i]), 
-                                       as.list(dist.combi[i, ][names(dist.combi) != "distType"]))
+      do.call(computeDistMat, args = c(list(x = rbind(traindata[[k]]$x, validdata[[k]]$x), 
+                    method = if(dist.combi$distType[i] == "dtw") {"custom.metric"} else {dist.combi$distType[i]},
+                    custom.metric = if(dist.combi$distType[i] == "dtw") {proxy::pr_DB$get_entry("dtw")$FUN} else {NULL}), 
+               as.list(dist.combi[i, ][names(dist.combi) != "distType"]))
       )[1:nrow(traindata[[k]]$x), (nrow(traindata[[k]]$x) + 1) : (nrow(traindata[[k]]$x) + nrow(validdata[[k]]$x))]})
     names(dnew[[i]]) <- paste("newdistance", 1:length(validdata), sep = "")
   }
@@ -76,14 +88,18 @@ cv.wrap.fpco <- function(traindata, validdata, cvparam, distparam, mparam, use.m
   
   # cross validataion over each cvparam(distparam and cvparam.2)
   ntime <- ifelse(nrow(combi) == 0, 1,nrow(combi))
-  ccombi <- dist.combi[rep(1:nrow(dist.combi), times = ntime),]
+  ccombi <- dist.combi[rep(1:nrow(dist.combi), times = ntime), ] #ccombi must be a dataframe
+  if(!is.data.frame(ccombi)) {
+    ccombi <- data.frame(ccombi, stringsAsFactors = FALSE); names(ccombi) <- names(dist.combi)}
   ccombi$dnr <- rep(1:nrow(dist.combi), times = ntime)
   ccombi <- cbind(ccombi, combi[rep(1:nrow(combi), each = nrow(dist.combi)),])
+  rownames(ccombi) <- NULL
   ccombi$mstop <- rep(100, times = nrow(ccombi))
+  print(ccombi)
   
   # select number of iteration and estimate model 
   res <- list()
-  if(use.method %in% paste("wrap.", "FDboost.", "fpco.", c("minkowski","dtw","correlation"), sep = "")){
+  if(use.method %in% paste("wrap.", "FDboost.", "fpco.", c("minkowski","dtw","correlation","elasticMetric"), sep = "")){
     for(i in 1:nrow(ccombi)){ 
        ccombi$mstop[i] <- select_mstop(smodel = do.call(use.method, args = list(data = traindata[[1]], 
                                                 cvparam = as.list(ccombi[i,]), 
@@ -112,15 +128,15 @@ cv.wrap.fpco <- function(traindata, validdata, cvparam, distparam, mparam, use.m
   return(list(res = res, cvparam.new = ccombi))
 }
 
-# wrap function of fpco-FDbooost using minkwoski distance
+# wrap function of fpco-FDbooost using minkwoski distance(checked)
 wrap.FDboost.fpco.minkowski <- function(data, newdata = NULL, cvparam = NULL, mparam= NULL, select = FALSE){
   if((is.character(data$y) | is.factor(data$y)) & nlevels(factor(data$y)) > 2){
    rspdummy <- levels(facotor(data$y)[-nlevels(factor(data$y))])}
   
   #set parameter value, if not explicitly given set parameter to default value
   d = if(is.null(mparam$d)) {NULL} else {mparam$d}
-#   df = if(is.null(cvparam$df)) {4} else {cvparam$df}
-#   lambda = if(is.null(cvparam$lambda)) {NULL} else {cvparam$lambda}
+  df = if(is.null(cvparam$df)) {4} else {cvparam$df}
+  lambda = if(is.null(cvparam$lambda)) {NULL} else {cvparam$lambda}
   penalty =  if(is.null(cvparam$penalty)) {"identity"} else {cvparam$penalty}
   pve = if(is.null(cvparam$pve)) {0.95} else {cvparam$pve}
   npc = if(is.null(cvparam$npc)) {NULL} else {cvparam$npc}
@@ -129,10 +145,10 @@ wrap.FDboost.fpco.minkowski <- function(data, newdata = NULL, cvparam = NULL, mp
   distType = if(is.null(cvparam$distType)) {'Minkowski'} else {cvparam$distType}
   p = if(is.null(cvparam$p)) {1} else {cvparam$p}
   
-  fm <- as.formula(y ~ bfpco(x = x, s = s, index = NULL,
-                   d = d, df = 4, lambda = NULL, penalty = penalty,
-                   pve = pve, npc = npc, npc.max = npc.max,
-                   add = add, distType = distType, p = p))
+  fm <- formula(bquote(y ~ bfpco(x = x, s = s, index = NULL,
+                   d = d, df = .(df), lambda = .(lambda), penalty = .(penalty),
+                   pve = .(pve), npc = .(npc), npc.max = .(npc.max),
+                   add = .(add), distType = .(distType), p = .(p))))
   
   if(!is.null(mparam$rspformula)) fm = paste(fm, "%O%", mparam$rspformula, sep = "")                   
   
@@ -149,29 +165,29 @@ wrap.FDboost.fpco.minkowski <- function(data, newdata = NULL, cvparam = NULL, mp
   return(list(yhat.train = yhat.train, yhat.test = yhat.test))
 }
 
-# wrap function of fpco-FDbooost using dtw distance
+# wrap function of fpco-FDbooost using dtw distance(checked)
 wrap.FDboost.fpco.dtw <- function(data, newdata = NULL, cvparam = NULL, mparam= NULL, select = FALSE){
   if((is.character(data$y) | is.factor(data$y)) & nlevels(factor(data$y)) > 2){
     rspdummy <- levels(facotor(data$y)[-nlevels(factor(data$y))])}
   
   #set parameter value, if not explicitly given set parameter to default value
   d = if(is.null(mparam$d)) {NULL} else {mparam$d}
-  #   df = if(is.null(cvparam$df)) {4} else {cvparam$df}
-  #   lambda = if(is.null(cvparam$lambda)) {NULL} else {cvparam$lambda}
+  df = if(is.null(cvparam$df)) {4} else {cvparam$df}
+  lambda = if(is.null(cvparam$lambda)) {NULL} else {cvparam$lambda}
   penalty =  if(is.null(cvparam$penalty)) {"identity"} else {cvparam$penalty}
   pve = if(is.null(cvparam$pve)) {0.95} else {cvparam$pve}
   npc = if(is.null(cvparam$npc)) {NULL} else {cvparam$npc}
   npc.max = if(is.null(cvparam$npc.max)) {15} else {cvparam$npc.max}
   add = if(is.null(cvparam$add)) {FALSE} else {cvparam$add}
-  distType = if(is.null(cvparam$distType)) {'DTW'} else {cvparam$distType}
+  distType = if(is.null(cvparam$distType)) {"dtw"} else {cvparam$distType}
   window.type = if(is.null(cvparam$window.type)) {"none"} else {cvparam$window.type}
   window.size = if(is.null(cvparam$window.size)) {1} else {cvparam$window.size}
   
-  fm <- as.formula(y ~ bfpco(x = x, s = s, index = NULL,
-                             d = d, df = 4, lambda = NULL, penalty = penalty,
-                             pve = pve, npc = npc, npc.max = npc.max,
-                             add = add, distType = distType, window.type = window.type,
-                             window.size = window.size))
+  fm <- formula(bquote(y ~ bfpco(x = x, s = s, index = NULL,
+                                 d = d, df = .(df), lambda = .(lambda), penalty = .(penalty),
+                                 pve = .(pve), npc = .(npc), npc.max = .(npc.max),
+                                 add = .(add), distType = .(distType), window.type = .(window.type),
+                                 window.size = .(window.size))))
   
   if(!is.null(mparam$rspformula)) fm = paste(fm, "%O%", mparam$rspformula, sep = "")                   
   
@@ -188,15 +204,15 @@ wrap.FDboost.fpco.dtw <- function(data, newdata = NULL, cvparam = NULL, mparam= 
   return(list(yhat.train = yhat.train, yhat.test = yhat.test))
 }
 
-# wrap function of fpco-FDbooost using correlation distance
+# wrap function of fpco-FDbooost using correlation distance(checked)
 wrap.FDboost.fpco.correlation <- function(data, newdata = NULL, cvparam = NULL, mparam= NULL, select = FALSE){
   if((is.character(data$y) | is.factor(data$y)) & nlevels(factor(data$y)) > 2){
     rspdummy <- levels(facotor(data$y)[-nlevels(factor(data$y))])}
   
   #set parameter value, if not explicitly given set parameter to default value
   d = if(is.null(mparam$d)) {NULL} else {mparam$d}
-  #   df = if(is.null(cvparam$df)) {4} else {cvparam$df}
-  #   lambda = if(is.null(cvparam$lambda)) {NULL} else {cvparam$lambda}
+  df = if(is.null(cvparam$df)) {4} else {cvparam$df}
+  lambda = if(is.null(cvparam$lambda)) {NULL} else {cvparam$lambda}
   penalty =  if(is.null(cvparam$penalty)) {"identity"} else {cvparam$penalty}
   pve = if(is.null(cvparam$pve)) {0.95} else {cvparam$pve}
   npc = if(is.null(cvparam$npc)) {NULL} else {cvparam$npc}
@@ -204,10 +220,10 @@ wrap.FDboost.fpco.correlation <- function(data, newdata = NULL, cvparam = NULL, 
   add = if(is.null(cvparam$add)) {FALSE} else {cvparam$add}
   distType = if(is.null(cvparam$distType)) {'correlation'} else {cvparam$distType}
   
-  fm <- as.formula(y ~ bfpco(x = x, s = s, index = NULL,
-                             d = d, df = 4, lambda = NULL, penalty = penalty,
-                             pve = pve, npc = npc, npc.max = npc.max,
-                             add = add, distType = distType))
+  fm <- formula(bquote(y ~ bfpco(x = x, s = s, index = NULL,
+                                 d = d, df = .(df), lambda = .(lambda), penalty = .(penalty),
+                                 pve = .(pve), npc = .(npc), npc.max = .(npc.max),
+                                 add = .(add), distType = .(distType))))
   
   if(!is.null(mparam$rspformula)) fm = paste(fm, "%O%", mparam$rspformula, sep = "")                   
   
@@ -224,23 +240,59 @@ wrap.FDboost.fpco.correlation <- function(data, newdata = NULL, cvparam = NULL, 
   return(list(yhat.train = yhat.train, yhat.test = yhat.test))
 }
 
-# wrap function of fpc-FDbooost 
+# wrap function of fpco-FDbooost using correlation distance(checked)
+wrap.FDboost.fpco.elasticMetric <- function(data, newdata = NULL, cvparam = NULL, mparam= NULL, select = FALSE){
+  if((is.character(data$y) | is.factor(data$y)) & nlevels(factor(data$y)) > 2){
+    rspdummy <- levels(facotor(data$y)[-nlevels(factor(data$y))])}
+  
+  #set parameter value, if not explicitly given set parameter to default value
+  d = if(is.null(mparam$d)) {NULL} else {mparam$d}
+  df = if(is.null(cvparam$df)) {4} else {cvparam$df}
+  lambda = if(is.null(cvparam$lambda)) {NULL} else {cvparam$lambda}
+  penalty =  if(is.null(cvparam$penalty)) {"identity"} else {cvparam$penalty}
+  pve = if(is.null(cvparam$pve)) {0.95} else {cvparam$pve}
+  npc = if(is.null(cvparam$npc)) {NULL} else {cvparam$npc}
+  npc.max = if(is.null(cvparam$npc.max)) {15} else {cvparam$npc.max}
+  add = if(is.null(cvparam$add)) {FALSE} else {cvparam$add}
+  distType = if(is.null(cvparam$distType)) {'elasticMetric'} else {cvparam$distType}
+  
+  fm <- formula(bquote(y ~ bfpco(x = x, s = s, index = NULL,
+                                 d = d, df = .(df), lambda = .(lambda), penalty = .(penalty),
+                                 pve = .(pve), npc = .(npc), npc.max = .(npc.max),
+                                 add = .(add), distType = .(distType))))
+  
+  if(!is.null(mparam$rspformula)) fm = paste(fm, "%O%", mparam$rspformula, sep = "")                   
+  
+  mod <- FDboost(fm, 
+                 timeformula = if(is.null(mparam$timeformula)) {NULL} else {mparam$timeformula},
+                 family = if(is.null(mparam$family)) {Gaussian()} else {mparam$family}, 
+                 control = boost_control(mstop = if(is.null(mparam$mstop)) {100} else {mparam$mstop}),
+                 data = data)
+  
+  if(select == TRUE)  return(mod)
+  
+  yhat.train <- mod$fitted()                          
+  yhat.test <- predict(mod, newdata = newdata)
+  return(list(yhat.train = yhat.train, yhat.test = yhat.test))
+}
+
+# wrap function of fpc-FDbooost(checked) 
 wrap.FDboost.fpc <- function(data, newdata = NULL, cvparam = NULL, mparam= NULL, select = FALSE){
   if((is.character(data$y) | is.factor(data$y)) & nlevels(factor(data$y)) > 2){
     rspdummy <- levels(facotor(data$y)[-nlevels(factor(data$y))])}
   
   #set parameter value, if not explicitly given set parameter to default value
-#   df = if(is.null(cvparam$df)) {4} else {cvparam$df}
-#   lambda = if(is.null(cvparam$lambda)) {NULL} else {cvparam$lambda}
+  df = if(is.null(cvparam$df)) {4} else {cvparam$df}
+  lambda = if(is.null(cvparam$lambda)) {NULL} else {cvparam$lambda}
   penalty =  if(is.null(cvparam$penalty)) {"identity"} else {cvparam$penalty}
   pve = if(is.null(cvparam$pve)) {0.95} else {cvparam$pve}
   npc = if(is.null(cvparam$npc)) {NULL} else {cvparam$npc}
   npc.max = if(is.null(cvparam$npc.max)) {15} else {cvparam$npc.max}
   getEigen = if(is.null(cvparam$getEigen)) {TRUE} else {cvparam$getEigen}
   
-  fm <- formula(y ~ bfpc(x = x, s = s, index = NULL, df = 4, lambda = NULL, 
-                         penalty = penalty, pve = pve, npc = npc, npc.max = npc.max,
-                         getEigen = getEigen)) 
+  fm <- formula(bquote(y ~ bfpc(x = x, s = s, index = NULL, df = .(df), lambda = .(lambda), 
+                         penalty = .(penalty), pve = .(pve), npc = .(npc), npc.max = .(npc.max),
+                         getEigen = .(getEigen)))) 
   
   if(!is.null(mparam$rspformula)) fm = paste(fm, "%O%", mparam$rspformula, sep = "")                   
   
@@ -257,7 +309,7 @@ wrap.FDboost.fpc <- function(data, newdata = NULL, cvparam = NULL, mparam= NULL,
   return(list(yhat.train = yhat.train, yhat.test = yhat.test))
 }
 
-# wrap function of bsignal-FDbooost 
+# wrap function of bsignal-FDbooost(checked: not real error x is not centered per column, inducing a non-centered effect) 
 wrap.FDboost.fpco.bsignal <- function(data, newdata = NULL, cvparam = NULL, mparam= NULL, select = FALSE){
   if((is.character(data$y) | is.factor(data$y)) & nlevels(factor(data$y)) > 2){
     rspdummy <- levels(facotor(data$y)[-nlevels(factor(data$y))])}
@@ -276,11 +328,11 @@ wrap.FDboost.fpco.bsignal <- function(data, newdata = NULL, cvparam = NULL, mpar
   check.ident =  if(is.null(cvparam$check.ident)) {FALSE} else {cvparam$check.ident}
   
   # set formula, if y is multinomial, specific form is taken
-  fm <- formula( y ~ bsignal(x = x, s = s, index = NULL, inS = inS, knots = knots,
-                             boundary.knots = boundary.knots, degree = degree,
-                             differences = differences, df = 4, lambda = lambda,
-                             center = center, cyclic = cyclic, Z = Z, penalty = penalty,
-                             check.ident = check.ident))
+  fm <- formula(bquote(y ~ bsignal(x = x, s = s, index = NULL, inS = .(inS), knots = .(knots),
+                             boundary.knots = .(boundary.knots), degree = .(degree),
+                             differences = .(differences), df = .(df), lambda = .(lambda),
+                             center = .(center), cyclic = .(cyclic), Z = Z, penalty = .(penalty),
+                             check.ident = .(check.ident))))
   
   if(!is.null(mparam$rspformula)) fm = paste(fm, "%O%", mparam$rspformula, sep = "")                   
   
@@ -297,25 +349,26 @@ wrap.FDboost.fpco.bsignal <- function(data, newdata = NULL, cvparam = NULL, mpar
   return(list(yhat.train = yhat.train, yhat.test = yhat.test))
 }
 
-# wrap function of fpco-gam
+# wrap function of fpco-gam(checked)
 wrap.gam.fpco <- function(data, newdata = NULL, cvparam = NULL, mparam = NULL, select = FASLE){
   
   #set parameter value, if not explicitly given set parameter to default value
   y <- data$y
   dummy <- rep(1, times = length(data$y))
-  bs = 'pco'
-  k = if(is.null(cvparam$k)) {2} else {cvparam$k}
-  D = if(is.null(mparam$d)) {NULL} else {mparam$d}
-  add = if(is.null(cvparam$add)) {FALSE} else {cvparam$add}
-  fastcmd = if(is.null(cvparam$fastcmd)){FALSE} else {cvparam$cmdscale}
-  Dnew <- marapm$dnew
+  bs <- 'pco'
+  k <- if(is.null(cvparam$k)) {2} else {cvparam$k}
+  D <- if(is.null(mparam$d)) {NULL} else {mparam$d}
+  add <- if(is.null(cvparam$add)) {FALSE} else {cvparam$add}
+  fastcmd <- if(is.null(cvparam$fastcmd)){FALSE} else {cvparam$cmdscale}
+  Dnew <- if(is.null(mparam$dnew)) {NULL} else{mparam$dnew}
   
   # set formula
   fm <- formula(y ~ s(dummy, bs = 'pco', k = k,  
                       xt = list(D = D, add = add, fastcmd = fastcmd)))
   
   # estimate model
-  mod <- gam(formula = fm, method = if(is.null(mparam$method)) {"REML"} else {mparam$method})
+  mod <- gam(formula = fm, 
+             method = if(is.null(mparam$method)) {"REML"} else {mparam$method})
   
   # if called for select mstop, return mod 
   if(select == TRUE) return(mod)
@@ -328,8 +381,35 @@ wrap.gam.fpco <- function(data, newdata = NULL, cvparam = NULL, mparam = NULL, s
   yhat.test <- predict(mod, pred_data)
 }  
 
-# wrap function of fpr
-wrap.gam.fpr
+# wrap function of af-pfr(checked)
+wrap.gam.pfr <- function(data, newdata = NULL, cvparam = NULL, mparam = NULL, select = FALSE){
+  basistype <- if(is.null(cvparam$basistype)) {"te"} else {cvparam$basistype}
+  integration <- if(is.null(cvparam$integration)) {"simpson"} else {cvparam$basistype}
+  L <- if(is.null(cvparam$L)) {NULL} else {cvparam$L}
+  presmooth <- if(is.null(cvparam$presmooth)) {NULL} else {cvparam$presmooth}
+  presmooth.opts <- if(is.null(cvparam$presmooth.opts)) {NULL} else {cvparam$presmooth.opts}
+  Xrange <- if(is.null(cvparam$Xrange)) {range(data$x, na.rm = T)} else {cvparam$Xrange}
+  Qtransform <- if(is.null(cvparam$Qtransform)) {FALSE} else {cvparam$Qtransform}
+  bs <- if(is.null(cvparam$bs)) {"tp"} else {cvparam$bs}
+  m <- if(is.null(cvparam$m)) {NA} else {cvparam$m}
+  k <- if(is.null(cvparam$K)) {-1} else {cvparam$K}
+  
+  fm <- formula(bquote(y ~ af(x, basistype = .(basistype), integration = .(integration),
+                              L = .(L), presmooth = presmooth, presmooth.opts = presmooth.opts,
+                              Xrange = Xrange, Qtransform = .(Qtransform),
+                              k =.(k), m =.(m), bs = .(bs))))
+  
+  mod <- pfr(formula = fm, 
+             method = if(is.null(mparam$method)) {"GCV.Cp"} else{mparam$method}, 
+             gamma = if(is.null(mparam$gamma)) {1.2} else{mparam$gamma}, 
+             data = data)
+  
+  if(select == TRUE) return(mod)
+  
+  yhat.train <- mod$fitted.values
+  yhat.test <- predict(mod, newdata = newdata)
+  return(list(yhat.train = yhat.train, yhat.test = yhat.test))
+}
   
 ###############################################################################
 # Function to get training data index
