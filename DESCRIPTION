@@ -29,7 +29,8 @@ Imports:
     zoo,
     gamm4,
     proxy,
-    dtw
+    dtw,
+    classiFunc
 Suggests:
     fda,
     fields,

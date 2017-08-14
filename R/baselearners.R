@@ -1913,7 +1913,8 @@ X_fpco <- function(mf, vary, args) {
       # coordinate for the new data inserted into principal coordinate space
       # refer pco_predict_preprocess of refund package to add additive constant
       if(args$distType %in% c("dtw")){
-        Dist <- do.call(computeDistMat, c(list(x = klX$Y, y = X1, metric = args$distType), args$distparams)) # n*nnew
+        dist_dtw <- proxy::pr_DB$get_entry("dtw")$FUN
+        Dist <- do.call(computeDistMat, c(list(x = klX$Y, y = X1, method = "custom.metric", custom.metric = dist_dtw), args$distparams)) # n*nnew
       }else{
         Dist <- do.call(computeDistMat, c(list(x = klX$Y, y = X1, method = args$distType), args$distparams)) # n*nnew
       }
@@ -1940,9 +1941,10 @@ X_fpco <- function(mf, vary, args) {
         approxY <- matrix(NA, nrow = nrow(args$klX$Y), ncol = length(xind))
          for (i in 1:nrow(args$klX$Y))    
            approxY[i, ] <- approx(x = args$klX$xind, y = klX$Y[i,], xout = xind)$y
-        
+         
        if(args$distType %in% c("dtw")){
-          Dist <- do.call(computeDistMat, c(list(x = approxY, y = X1, metric = args$distType), args$distparams)) # n*nnew
+          dist_dtw <- proxy::pr_DB$get_entry("dtw")$FUN
+          Dist <- do.call(computeDistMat, c(list(x = approxY, y = X1, method = "custom.metric", custom.metric = dist_dtw), args$distparams)) # n*nnew
         }else{
           Dist <- do.call(computeDistMat, c(list(x = approxY, y = X1, method = args$distType), args$distparams)) # n*nnew
         }
@@ -2175,7 +2177,8 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, Dist = NULL, center = FALSE, random
   # if single functional is presented
   if(is.null(Dist)){
     if(distType %in% c("dtw")){
-      Dist <- computeDistMat(Y.tilde, metric = distType, ...)
+      dist_dtw <- proxy::pr_DB$get_entry("dtw")$FUN
+      Dist <- computeDistMat(Y.tilde, method = "custom.metric", custom.metric = dist_dtw, ...)
     }else{
       Dist <- computeDistMat(Y.tilde, method = distType, ...) 
     }
@@ -2293,10 +2296,10 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, Dist = NULL, center = FALSE, random
 # 
 # 
 # ### Comparison of bfpco based FDboost, bfpc based FDboost and pco based gam 
-# library(mgcv)
-# library(dtw)
-# library(refund)
-# 
+library(mgcv)
+library(dtw)
+library(refund)
+
 # ## Generate data, the toy dataset analyzed by Phillip(2017) is used
 # Xnl <- matrix(0, 30, 101)
 # set.seed(813)
@@ -2336,8 +2339,8 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, Dist = NULL, center = FALSE, random
 #              timeformula = NULL, data = toydata, control = boost_control(mstop = 200))
 # 
 # m3 <- FDboost(y.toy ~ bfpc(X.toy, s = s), timeformula = NULL, data = toydata)  
-# 
-# # Model fitted values
+# # 
+# # # Model fitted values
 # fitteds = data.frame(y.toy = toydata$y.toy, fitted_pco = m1$fitted.values, fitted_bfpco = m2$fitted(), fitted_bfpc = m3$fitted())
 # 
 # par(mfrow=c(2, 2))
@@ -2347,10 +2350,10 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, Dist = NULL, center = FALSE, random
 # 
 # # Average of square residual
 # c(resid_pco = mean(m1$residuals^2), resid_fpco = mean(m2$resid()^2), resid_fpc = mean(m3$resid()^2))
-# 
-# 
-# # Prediction for new data
-# # Case when new data have the same time index
+# # 
+# # 
+# # # Prediction for new data
+# # # Case when new data have the same time index
 # newdd = list(X.toy = Xnl + matrix(rnorm(30*101, 0, 0.05), 30), s = 1:101)
 # 
 # newpred_m2 = predict(m2, newdata = newdd)
@@ -2391,7 +2394,7 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, Dist = NULL, center = FALSE, random
 # 
 # # newdata the same as newdd
 # newdd = list(X.toy = Xnl + matrix(rnorm(30*101, 0, 0.05), 30), s = 1:101)
-#
+# 
 # # prediction
 # pred_binm1 <- predict(binm1, newdata = newdd, type = "class")
 # 
