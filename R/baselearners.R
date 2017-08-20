@@ -1819,11 +1819,11 @@ bfpc <- function(x, s, index = NULL, df = 4,
 
 
 ### hyper parameters for signal baselearner with eigenfunctions as bases, FPCO-based
-hyper_fpco <- function(mf, d = NULL, vary, df = 4, lambda = NULL,penalty = "identity",
+hyper_fpco <- function(mf, d = NULL, s=NULL, vary, df = 4, lambda = NULL, penalty = "identity",
                        pve = 0.95, npc = NULL, npc.max = 15, getEigen=TRUE, add = FALSE,
-                       s=NULL, distType = "Euclidean", ...) {
+                        fastcmd = FALSE, distType = "Euclidean",...) {
   list(d = d, df = df, lambda = lambda, penalty = penalty, pve = pve, npc = npc, npc.max = npc.max,
-       getEigen = getEigen, add = add, s = s, prediction = FALSE, distType = distType, distparams = list(...))
+       getEigen = getEigen, add = add, fastcmd = fastcmd, s = s, prediction = FALSE, distType = distType, distparams = list(...))
 }
 
 
@@ -1884,7 +1884,7 @@ X_fpco <- function(mf, vary, args) {
   
   ## do FPCO on X1 
   if(is.null(args$klX)){
-    decomppars <- list(argvals = xind, Dist = args$d, distType = args$distType, add = args$add,
+    decomppars <- list(argvals = xind, Dist = args$d, distType = args$distType, add = args$add, fastcmd = args$fastcmd,
                        pve = args$pve, npc = args$npc, npc.max = args$npc.max, eig = args$getEigen)
 
     decomppars <- c(decomppars, args$distparams)
@@ -1912,12 +1912,8 @@ X_fpco <- function(mf, vary, args) {
     if(ncol(X1) == length(klX$mu) && all(args$s == xind)){
       # coordinate for the new data inserted into principal coordinate space
       # refer pco_predict_preprocess of refund package to add additive constant
-      if(args$distType %in% c("dtw")){
-        dist_dtw <- proxy::pr_DB$get_entry("dtw")$FUN
-        Dist <- do.call(computeDistMat, c(list(x = klX$Y, y = X1, method = "custom.metric", custom.metric = dist_dtw), args$distparams)) # n*nnew
-      }else{
-        Dist <- do.call(computeDistMat, c(list(x = klX$Y, y = X1, method = args$distType), args$distparams)) # n*nnew
-      }
+      Dist <- do.call(computeDistMat, c(list(x = klX$Y, y = X1, method = args$distType), args$distparams)) # n*nnew
+        
       non.diag <- row(Dist) != col(Dist) # 
       Dist[non.diag] <- (Dist[non.diag] + klX$ac)
       
@@ -1942,12 +1938,7 @@ X_fpco <- function(mf, vary, args) {
          for (i in 1:nrow(args$klX$Y))    
            approxY[i, ] <- approx(x = args$klX$xind, y = klX$Y[i,], xout = xind)$y
          
-       if(args$distType %in% c("dtw")){
-          dist_dtw <- proxy::pr_DB$get_entry("dtw")$FUN
-          Dist <- do.call(computeDistMat, c(list(x = approxY, y = X1, method = "custom.metric", custom.metric = dist_dtw), args$distparams)) # n*nnew
-        }else{
-          Dist <- do.call(computeDistMat, c(list(x = approxY, y = X1, method = args$distType), args$distparams)) # n*nnew
-        }
+        Dist <- do.call(computeDistMat, c(list(x = approxY, y = X1, method = args$distType), args$distparams)) # n*nnew
         non.diag <- row(Dist) != col(Dist) # 
         Dist[non.diag] <- (Dist[non.diag] + klX$ac) # is the ac appropriate when grided? is ac only distance related?
          
@@ -2006,7 +1997,7 @@ X_fpco <- function(mf, vary, args) {
 # 
 # data(fuelSubset)
 # x = fuelSubset$UVVIS
-# d = dist(x, method = "dtw")
+# d = computeDistMat(x, method = "dtw")
 # 
 # i = 5
 # res1 <- cmdscale_lanczos_new(d, npc = i, pve = 0.99, npc.max = 15, eig = TRUE)
@@ -2015,7 +2006,18 @@ X_fpco <- function(mf, vary, args) {
 # all.equal(abs(res1$evalues),abs(res2$eig[1:length(res1$evalues)]))
 # all.equal(res1$x, res2$x)
 # all.equal(res1$ac, res2$ac)
+# 
+# res3 <- cmdscale_new(d, npc = i, pve = 0.99, npc.max = 15, eig = TRUE)
+# res4 <- cmdscale(d, k = i, eig = TRUE)
+# all.equal(abs(res3$points),abs(res4$points))
+# all.equal(abs(res3$evalues),abs(res4$eig[1:length(res3$evalues)]))
+# all.equal(res3$x, res4$x)
+# all.equal(res3$ac, res4$ac)
+#
 #' @importFrom mgcv slanczos
+# cmdscale_lanczos_new uses mgcv::slanczos for eigen-decomposition, while cmdscale_new use 
+# stats::eigen for eigen-decomposition. The former ranks eigenvalue by magnitute, the latter
+# ranks eigenvalue by value.
 cmdscale_lanczos_new <- function(d, npc = NULL, pve = 0.95, npc.max = 15, 
                                  eig = FALSE, add = FALSE, x.ret = FALSE){
   if (anyNA(d))
@@ -2126,22 +2128,142 @@ cmdscale_lanczos_new <- function(d, npc = NULL, pve = 0.95, npc.max = 15,
   
   # return 
   if (eig || x.ret || add) {
-    evalues = ev
     list(points = points, 
          evalues = if(eig) ev, 
          efunctions = if(eig) evec, 
          x = if(x.ret) x,
          ac = if(add) add.c else 0, 
          npc = npc,
-         GOF = sum(ev)/c(sum(abs(evalues)), sum(pmax(evalues, 0))) )
+         GOF = sum(ev)/c(sum(abs(ev)), sum(pmax(ev, 0))) )
+  } else points
+}
+
+cmdscale_new <- function (d, npc = NULL, pve = 0.95, npc.max = 15, eig = FALSE, add = FALSE, x.ret = FALSE) {
+  if (anyNA(d)) 
+    stop("NA values not allowed in 'd'")
+  #   if (!list.) {
+  #     if (eig) 
+  #       warning("eig=TRUE is disregarded when list.=FALSE")
+  #     if (x.ret) 
+  #       warning("x.ret=TRUE is disregarded when list.=FALSE")
+  #   }
+  if (is.null(n <- attr(d, "Size"))) {
+    if (add) 
+      d <- as.matrix(d)
+    x <- as.matrix(d^2)
+    storage.mode(x) <- "double"
+    if ((n <- nrow(x)) != ncol(x)) 
+      stop("distances must be result of 'dist' or a square matrix")
+    rn <- rownames(x)
+  }
+  else {
+    rn <- attr(d, "Labels")
+    x <- matrix(0, n, n)
+    if (add) 
+      d0 <- x
+    x[row(x) > col(x)] <- d^2
+    x <- x + t(x)
+    if (add) {
+      d0[row(x) > col(x)] <- d
+      d <- d0 + t(d0)
+    }
+  }
+  n <- as.integer(n)
+  if (is.na(n) || n > 46340) 
+    stop("invalid value of 'n'")
+  if(!is.null(npc)){
+    if ((npc <- as.integer(npc)) > n - 1 || npc < 1) 
+      stop("'npc' must be in {1, 2, ..  n - 1}")
+  }
+  
+  #x <- .Call(stats::C_DoubleCentre, x)
+  x <- scale(t(scale(t(x), scale=FALSE)),scale=FALSE)
+  
+  if (add) {
+    i2 <- n + (i <- 1L:n)
+    Z <- matrix(0, 2L * n, 2L * n)
+    Z[cbind(i2, i)] <- -1
+    Z[i, i2] <- -x
+    #Z[i2, i2] <- .Call(C_DoubleCentre, 2 * d)
+    Z[i2, i2] <- scale(t(scale(t(2*d), scale=FALSE)),scale=FALSE)
+    e <- eigen(Z, symmetric = FALSE, only.values = TRUE)$values
+    add.c <- max(Re(e))
+    x <- matrix(double(n * n), n, n)
+    non.diag <- row(d) != col(d)
+    x[non.diag] <- (d[non.diag] + add.c)^2
+    #x <- .Call(C_DoubleCentre, x)
+    x <- scale(t(scale(t(x), scale=FALSE)),scale=FALSE)
+  }
+  
+  e <- eigen(-x/2, symmetric = TRUE)
+  #   ev <- e$values[seq_len(k)]
+  #   evec <- e$vectors[, seq_len(k), drop = FALSE]
+  #   k1 <- sum(ev > 0)
+  #   if (k1 < k) {
+  #     warning(gettextf("only %d of the first %d eigenvalues are > 0", 
+  #                      k1, k), domain = NA)
+  #     evec <- evec[, ev > 0, drop = FALSE]
+  #     ev <- ev[ev > 0]
+  #   }
+  #   points <- evec * rep(sqrt(ev), each = n)
+  
+  ev <- e$values
+  evec <- e$vectors
+  
+  ###### here is where Weili inserted npc.max and pve
+  # rank the ev in decreasing order
+  ord <- order(ev, decreasing = TRUE)
+  ev <- ev[ord]
+  evec <- evec[,ord]
+  
+  # compute npc 
+  npc <- ifelse(is.null(npc), min(which(cumsum(ev)/sum(ev[ev > 0]) > pve)), npc)
+  if(npc > npc.max)  
+    npc <- npc.max
+  
+  # get first npc evalues and efunctions
+  ev <- ev[1:npc]  
+  evec <- as.matrix(evec[,1:npc])
+  
+  # give warning if negative evalue exists
+  npc1 <- sum(ev > 0)
+  if(npc1 < npc) {
+    warning(gettextf("only %d of the first %d eigenvalues are > 0", npc1, npc),
+            domain = NA)
+  } 
+  
+  # remove negative evalues
+  evec <- evec[, ev > 0, drop = FALSE]
+  ev <- ev[ev > 0]
+  
+  # compute points
+  points <- evec * rep(sqrt(ev), each=n)
+  dimnames(points) <- list(rn, NULL)
+  
+  #   if (list.) {
+  #     evalus <- e$values
+  #     list(points = points, eig = if (eig) evalus, x = if (x.ret) x, 
+  #          ac = if (add) add.c else 0, GOF = sum(ev)/c(sum(abs(evalus)), 
+  #                                                      sum(pmax(evalus, 0))))
+  #   }
+  #   else points
+  # }
+  
+  if (eig || x.ret || add) {
+    list(points = points, 
+         evalues = if(eig) ev, 
+         efunctions = if(eig) evec, 
+         x = if(x.ret) x,
+         ac = if(add) add.c else 0, 
+         npc = npc,
+         GOF = sum(ev)/c(sum(abs(ev)), sum(pmax(ev, 0))) )
   } else points
 }
 
 
-
 ### FPCO by smooth centered dissimilarity matrix
 fpco.sc <- function(Y = NULL, Y.pred = NULL, Dist = NULL, center = FALSE, random.int = FALSE, nbasis = 10,
-                   argvals = NULL, distType = NULL, add = FALSE, npc = NULL, npc.max = NULL, pve = 0.95, eig = TRUE, ...) {
+                   argvals = NULL, distType = NULL, add = FALSE, npc = NULL, npc.max = NULL, pve = 0.95, eig = TRUE, fastcmd = FALSE, ...) {
   
   ## longer computation time due to dist function
   
@@ -2176,12 +2298,7 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, Dist = NULL, center = FALSE, random
   # dissimilarity matrix
   # if single functional is presented
   if(is.null(Dist)){
-    if(distType %in% c("dtw")){
-      dist_dtw <- proxy::pr_DB$get_entry("dtw")$FUN
-      Dist <- computeDistMat(Y.tilde, method = "custom.metric", custom.metric = dist_dtw, ...)
-    }else{
       Dist <- computeDistMat(Y.tilde, method = distType, ...) 
-    }
   }
   if(!is.matrix(Dist)) {stop("The given Dist(distMatrix) is not a matrix!")}else{
     if(ncol(Dist) != nrow(Y) | nrow(Dist) != nrow(Y) ) stop("The number of columns/rows of given Dist(distMatrix) is different from the number of rows of data!")
@@ -2189,8 +2306,13 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, Dist = NULL, center = FALSE, random
   
   # modify cmdsclale_lanczos function from refund package
   # because cmdscale_lanczos does not allow to select pco by pve
-  ll <- cmdscale_lanczos_new(d = Dist, npc = npc, npc.max = npc.max, pve = pve, 
+  if(fastcmd){
+    ll <- cmdscale_lanczos_new(d = Dist, npc = npc, npc.max = npc.max, pve = pve, 
+                                 eig = eig, add = add, x.ret = TRUE)
+  }else{
+    ll <- cmdscale_new(d = Dist, npc = npc, npc.max = npc.max, pve = pve, 
                                eig = eig, add = add, x.ret = TRUE)
+  }
   
   points <- ll$points
   evalues <- ll$evalues
@@ -2244,6 +2366,7 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, Dist = NULL, center = FALSE, random
 
 ################################################################################
 #' FPCO base-learner
+#' @import dtw
 #' @importFrom classiFunc computeDistMat
 #' @export
 #' @rdname bsignal
@@ -2293,13 +2416,13 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, Dist = NULL, center = FALSE, random
 # temp$df()
 # # the names of PCOs
 # temp$Xnames
-# 
+#
 # 
 # ### Comparison of bfpco based FDboost, bfpc based FDboost and pco based gam 
-library(mgcv)
-library(dtw)
-library(refund)
-
+# library(mgcv)
+# library(dtw)
+# library(refund)
+#
 # ## Generate data, the toy dataset analyzed by Phillip(2017) is used
 # Xnl <- matrix(0, 30, 101)
 # set.seed(813)
@@ -2326,7 +2449,7 @@ library(refund)
 #         ylab="", main="Rainbow plot")
 # 
 # # Obtain DTW distances
-# D.dtw <- dist(X.toy, method="dtw", window.type="sakoechiba", window.size=5)
+# D.dtw <- computeDistMat(X.toy, method="dtw", window.type="sakoechiba", window.size=5)
 # 
 # # Model data
 # toydata <- list(y.toy = y.toy, X.toy = X.toy, s = 1:101)
@@ -2442,7 +2565,7 @@ library(refund)
 # legend("topright", legend = c("dtw_fpco", "fpc", "euclidean_fpco"), c(17,15,16), c("red", "black", "green"), cex = 0.5)
 
 bfpco <- function(x, s, d = NULL, index = NULL, df = 4, lambda = NULL, penalty = "identity",
-                  pve = 0.95, npc = NULL, npc.max = 15, getEigen = TRUE, add = FALSE, distType = "Euclidean",
+                  pve = 0.95, npc = NULL, npc.max = 15, getEigen = TRUE, add = FALSE, fastcmd = FALSE, distType = "Euclidean",
                   ...){
   
   if (!is.null(lambda)) df <- NULL
@@ -2486,7 +2609,7 @@ bfpco <- function(x, s, d = NULL, index = NULL, df = 4, lambda = NULL, penalty =
                                    df = df, lambda = lambda,
                                    penalty = penalty,
                                    pve = pve, npc = npc, npc.max = npc.max,
-                                   s = s, distType = distType, getEigen = getEigen, add = add, ...))
+                                   s = s, distType = distType, getEigen = getEigen, add = add, fastcmd = fastcmd, ...))
   
   # temp is a list of score, penalty matrix, and args
   ## save the FPCA in args
