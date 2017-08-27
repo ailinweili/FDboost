@@ -7,6 +7,7 @@
 # function to perform cross validation for all models used
 cv.wrap.func <- function(data, train_index, use.method, cvparam, mparam){
   
+  # get list of training data and validation data
   if(is.null(data$rspdummy)){
   traindata <- lapply(train_index, FUN = function(m) list(y = data$y[m], x = data$x[m,], s = data$s))
   validdata <- lapply(train_index, FUN = function(m) list(y = data$y[-m], x = data$x[-m,], s = data$s))
@@ -16,17 +17,19 @@ cv.wrap.func <- function(data, train_index, use.method, cvparam, mparam){
   }
   
   # generate a dataframe of cv hyperparameters for each use.method
-  # deal with cvparam = NULL
+  # <fix me>deal with cvparam = NULL
   cvparam.df <- lapply(cvparam, FUN = function(x) unique(expand.grid(x, stringsAsFactors = FALSE)))
   names(cvparam.df)  <- paste(use.method, ".cvparam", sep = "")
   print(cvparam.df)
   
   res <- list()
   cvparam.new <- list()
+  mod <- list()
   for( i in 1:length(cvparam.df)){
     
     if(use.method[i] %in% c("wrap.gam.fpco", paste("wrap.", "FDboost.", "fpco.", c("minkowski","dtw","correlation","elasticMetric"), sep = ""))){
       
+      # get all distance related parameters
       if(use.method[i] == "wrap.FDboost.fpco.minkowski") cvparam.1 <- list(distType = cvparam.df[[i]]$distType, p = as.numeric(cvparam.df[[i]]$p))
       if(use.method[i] == "wrap.FDboost.fpco.dtw") cvparam.1 <- list(distType = cvparam.df[[i]]$distType,  window.type = cvparam.df[[i]]$window.type, window.size = cvparam[[i]]$window.size)
       if(use.method[i] == "wrap.FDboost.fpco.correlation") cvparam.1 <- list(distType = cvparam.df[[i]]$distType)
@@ -34,61 +37,77 @@ cv.wrap.func <- function(data, train_index, use.method, cvparam, mparam){
       if(use.method[i] == "wrap.gam.fpco") cvparam.1 <- list(distType = cvparam.df[[i]]$distType)
       cvparam.1 <- cvparam.1[sapply(1:length(cvparam.1), FUN = function(k){!is.null(cvparam.1[[k]])})]
       
+      # call cv.wrap.fpco function
       temp <- cv.wrap.fpco(traindata = traindata, validdata = validdata, 
                            cvparam = cvparam.df[[i]], distparam = cvparam.1, 
                            mparam = mparam[[i]], use.method = use.method[i])
+      # rename?
       res[[i]] <- temp$res
       cvparam.new[[i]] <- temp$cvparam.new
-      names(res)[i] <- use.method[i]
-      names(res[[i]]) <- paste("cvparam.new.row", 1:nrow(cvparam.new[[i]]), sep = "")
-      names(cvparam.new)[i] <- use.method[i]
+      mod[[i]] <- temp$mod
+      
+      names(res)[i] <- names(mod)[i] <- names(cvparam.new)[i] <- use.method[i]
+      names(res[[i]]) <- names(mod[[i]]) <- paste("cvparam.new.row", 1:nrow(cvparam.new[[i]]), sep = "")
     }
     
     
     if(use.method[i] %in% paste("wrap.", "FDboost.", c("fpc","bsignal"), sep = "")){
+      res[[i]] <- list()
+      mod[[i]] <- list()
+      cvparam.df[[i]]
       for( j in 1:nrow(cvparam.df[[i]])){
-        bstop <- select_mstop(smodel = do.call(use.method[i], args = list(data = traindata[[1]], 
-               cvparam = if(is.data.frame(cvparam.df)) {as.list(cvparam.df[[i]][j,])} else {as.list(cvparam.df[[i]])},
+        cvparam.df$mstop[[i]] <- select_mstop(smodel = do.call(use.method[i], args = list(data = traindata[[1]], 
+               cvparam = if(is.data.frame(cvparam.df[[i]][j,])) {as.list(cvparam.df[[i]][j,])} else {as.list(cvparam.df[[i]])},
                mparam = mparam[[i]], select = TRUE)))
         
-        res[[i]] <- list()
         res[[i]][[j]] <- lapply(1:length(traindata), FUN = function(k) {do.call(use.method[i], 
             args = list(data = traindata[[k]], newdata = validdata[[k]], 
                         cvparam = if(is.data.frame(cvparam.df[[i]][j,])) {as.list(cvparam.df[[i]][j,])} else {as.list(cvparam.df[[i]])}, 
-                        mparam = c(mparam[[i]], list(mstop = bstop)), 
+                        mparam = c(mparam[[i]], list(mstop = cvparam.df$mstop[[i]])), 
                         select = FALSE))})
         names(res[[i]][[j]]) <- paste("cvdata", 1:length(traindata), sep = "")
+        
+        mod[[i]][[j]] <- do.call(use.method[i], 
+                       args = list(data = traindata[[1]], newdata = NULL, 
+                                   cvparam = if(is.data.frame(cvparam.df[[i]][j,])) {as.list(cvparam.df[[i]][j,])} else {as.list(cvparam.df[[i]])}, 
+                                   mparam = c(mparam[[i]], list(mstop = cvparam.df$mstop[[i]])), 
+                                   select = TRUE))
       }
     
       cvparam.new[[i]] <- cvparam.df[[i]]
-      names(cvparam.new)[i] <- use.method[i]
       
-      names(res)[i] <- use.method[i]
-      names(res[[i]]) <- paste("cvparam.new.row", 1:nrow(cvparam.new[[i]]), sep = "")
+      names(res)[i] <- names(mod)[i] <- names(cvparam.new)[i] <- use.method[i]
+      names(res[[i]]) <- names(mod[[i]]) <- paste("cvparam.new.row", 1:nrow(cvparam.new[[i]]), sep = "")
+      
     }
 
     if(use.method[i] %in% paste("wrap.","gam.", c("pfr"), sep = "")){ # to be checked
+      res[[i]] <- list()
+      mod[[i]] <- list()
       for( j in 1:nrow(cvparam.df[[i]])){
-        res[[i]] <- list()
         res[[i]][[j]] <- lapply(1:length(traindata), FUN = function(k) {
           do.call(use.method[i], 
             args = list(data = traindata[[k]], newdata = validdata[[k]], 
                         cvparam = if(is.data.frame(cvparam.df[[i]][j,])) {as.list(cvparam.df[[i]][j,])} else {as.list(cvparam.df[[i]])}, 
-                        mparam = mparam, 
+                        mparam = mparam[[i]], 
                         select = FALSE))})
         names(res[[i]][[j]]) <- paste("cvdata", 1:length(traindata), sep = "")
+      
+        mod[[i]][[j]]  <- do.call(use.method[i], 
+          args = list(data = traindata[[1]], newdata = NULL, 
+                      cvparam = if(is.data.frame(cvparam.df[[i]][j,])) {as.list(cvparam.df[[i]][j,])} else {as.list(cvparam.df[[i]])}, 
+                      mparam = mparam, 
+                      select = TRUE))
       }
       
       cvparam.new[[i]] <- cvparam.df[[i]]
-      names(cvparam.new)[i] <- use.method[i]
-      
-      names(res)[i] <- use.method[i]
-      names(res[[i]]) <- paste("cvparam.new.row", 1:nrow(cvparam.new[[i]]), sep = "")
+
+      names(res)[i] <- names(mod)[i] <- names(cvparam.new)[i] <- use.method[i]
+      names(res[[i]]) <- names(mod[[i]]) <- paste("cvparam.new.row", 1:nrow(cvparam.new[[i]]), sep = "")
     }
-    
   }    
   
-  return(list(res = res, cvparam.new = cvparam.new))
+  return(list(res = res, cvparam.new = cvparam.new, mod = mod))
 }
 
 # function to perform cross validation for fpco-based models, called by cv.wrap.func  
@@ -108,7 +127,7 @@ cv.wrap.fpco <- function(traindata, validdata, cvparam, distparam, mparam, use.m
     names(d[[i]]) <- paste("traindata", 1:length(traindata), sep = "")
   }
   
-  # compute distance matrix of prediction dta for each distance measure and each train/validdataset
+  # compute distance matrix of prediction data for each train/validdataset, to be used by wrap.gam.fpco function 
   if(use.method %in% c("wrap.gam.fpco")){
     dnew <- list(list()) 
     for(i in 1:nrow(dist.combi)){
@@ -123,7 +142,7 @@ cv.wrap.fpco <- function(traindata, validdata, cvparam, distparam, mparam, use.m
   
   # unique cvparameter which are unrelated to distance measure
   cvparam.2 <- cvparam[!(names(cvparam) %in% names(distparam))]
-  combi <- expand.grid(cvparam.2) # what if combi has 0 length?
+  combi <- unique(expand.grid(cvparam.2, stringsAsFactors = FALSE)) # what if combi has 0 length?
   
   # cross validataion over each cvparam(distparam and cvparam.2)
   ntime <- ifelse(nrow(combi) == 0, 1,nrow(combi))
@@ -136,8 +155,9 @@ cv.wrap.fpco <- function(traindata, validdata, cvparam, distparam, mparam, use.m
   ccombi$mstop <- rep(100, times = nrow(ccombi))
   print(ccombi)
   
-  # select number of iteration and estimate model 
+  # given a method, select number of iteration and estimate model 
   res <- list()
+  mod <- list()
   if(use.method %in% paste("wrap.", "FDboost.", "fpco.", c("minkowski","dtw","correlation","elasticMetric"), sep = "")){
     for(i in 1:nrow(ccombi)){ 
       ccombi$mstop[i] <- select_mstop(smodel = do.call(use.method, args = list(data = traindata[[1]], 
@@ -148,10 +168,16 @@ cv.wrap.fpco <- function(traindata, validdata, cvparam, distparam, mparam, use.m
          do.call(use.method, args = list(data = traindata[[k]], newdata = validdata[[k]], 
                                          cvparam = as.list(ccombi[i,]), 
                                          mparam= c(mparam, list(d = d[[ccombi[i,"dnr"]]][[k]], 
-                                                 dnew = if(exists("dnew")) {dnew[[ccombi[i, "dnr"]]][[k]]} else{NULL}, 
                                                  mstop = ccombi$mstop[i])),
                                          select = FALSE))})
       names(res[[i]]) <- paste("cvdata", 1:length(traindata), sep = "")
+      
+      mod[[i]] <- do.call(use.method, 
+                          args = list(data = traindata[[1]], newdata = NULL, 
+                                      cvparam = as.list(ccombi[i,]), 
+                                      mparam= c(mparam, list(d = d[[ccombi[i,"dnr"]]][[1]], 
+                                                             mstop = ccombi$mstop[i])),
+                                      select = TRUE))
     }
   }
   
@@ -161,12 +187,19 @@ cv.wrap.fpco <- function(traindata, validdata, cvparam, distparam, mparam, use.m
         do.call(use.method, args = list(data = traindata[[k]], newdata = validdata[[k]], 
                                         cvparam = as.list(ccombi[i,]),
                                         mparam= c(mparam, list(d = d[[ccombi[i,"dnr"]]][[k]], 
-                                                  dnew = dnew[[ccombi[i, "dnr"]]][[k]]))))})   # dnew is empty
+                                                  dnew = dnew[[ccombi[i, "dnr"]]][[k]]))))})   
       names(res[[i]]) <- paste("cvdata", 1:length(traindata), sep = "")
+      
+      mod[[i]] <- do.call(use.method, 
+                          args = list(data = traindata[[1]], newdata = NULL, 
+                                      cvparam = as.list(ccombi[i,]),
+                                      mparam= c(mparam, list(d = d[[ccombi[i,"dnr"]]][[1]], 
+                                                dnew = dnew[[ccombi[i, "dnr"]]][[1]])), 
+                                      select = TRUE))
     }
   }
   
-  return(list(res = res, cvparam.new = ccombi))
+  return(list(res = res, cvparam.new = ccombi, mod = mod))
 }
 
 
@@ -182,7 +215,7 @@ function(data, newdata = NULL, cvparam = NULL, mparam= NULL, select = FALSE){
   }
     
   # set parameter value, if not explicitly given set parameter to default value
-  d = if(is.null(mparam$d)) {NULL} else {mparam$d}
+  data$d = if(is.null(mparam$d)) {NULL} else {mparam$d}
   df = if(is.null(cvparam$df)) {4} else {cvparam$df}
   lambda = if(is.null(cvparam$lambda)) {NULL} else {cvparam$lambda}
   penalty =  if(is.null(cvparam$penalty)) {"identity"} else {cvparam$penalty}
@@ -190,6 +223,7 @@ function(data, newdata = NULL, cvparam = NULL, mparam= NULL, select = FALSE){
   npc = if(is.null(cvparam$npc)) {NULL} else {cvparam$npc}
   npc.max = if(is.null(cvparam$npc.max)) {15} else {cvparam$npc.max}
   add = if(is.null(cvparam$add)) {FALSE} else {cvparam$add}
+  fastcmd = if(is.null(cvparam$fastcmd)) {FALSE} else {cvparam$add}
   
   if(match.call()[[1]] == "wrap.FDboost.fpco.minkowski"){
     print("wrap.FDboost.fpco.minkowski")
@@ -199,7 +233,7 @@ function(data, newdata = NULL, cvparam = NULL, mparam= NULL, select = FALSE){
     fm <- formula(bquote(y ~ bfpco(x = x, s = s, index = NULL,
                      d = d, df = .(df), lambda = .(lambda), penalty = .(penalty),
                      pve = .(pve), npc = .(npc), npc.max = .(npc.max),
-                     add = .(add), distType = .(distType), p = .(p))))
+                     add = .(add), distType = .(distType), p = .(p))), fastcmd = .(fastcmd))
   }
 
   if(match.call()[[1]] == "wrap.FDboost.fpco.dtw"){
@@ -431,6 +465,12 @@ wrap.gam.fpco <- function(data, newdata = NULL, cvparam = NULL, mparam = NULL, s
 
 # wrap function of af-pfr(checked)
 wrap.gam.pfr <- function(data, newdata = NULL, cvparam = NULL, mparam = NULL, select = FALSE){
+  
+  # format data
+  #data.df <- data.frame(y = data$y, x = I(data$x))
+  #if(!is.null(newdata)) {newdata.df <- data.frame(y = newdata$y, x = I(newdata$x))}
+  
+  # set parameters
   basistype <- if(is.null(cvparam$basistype)) {"te"} else {cvparam$basistype}
   integration <- if(is.null(cvparam$integration)) {"simpson"} else {cvparam$basistype}
   L <- if(is.null(cvparam$L)) {NULL} else {cvparam$L}
@@ -440,22 +480,71 @@ wrap.gam.pfr <- function(data, newdata = NULL, cvparam = NULL, mparam = NULL, se
   Qtransform <- if(is.null(cvparam$Qtransform)) {FALSE} else {cvparam$Qtransform}
   bs <- if(is.null(cvparam$bs)) {"tp"} else {cvparam$bs}
   m <- if(is.null(cvparam$m)) {NA} else {cvparam$m}
-  k <- if(is.null(cvparam$K)) {-1} else {cvparam$K}
+  k1 <- if(is.null(cvparam$k1)) {-1} else {cvparam$k1}
+  k2 <- if(is.null(cvparam$k2)) {NULL} else {cvparam$k2}
+  method <- if(is.null(mparam$method)) {"GCV.Cp"} else{mparam$method}
+  family <- if(is.null(mparam$family)) {gaussian(link = "identity")} else{mparam$family}
   
-  fm <- formula(bquote(y ~ af(x, basistype = .(basistype), integration = .(integration),
-                              L = .(L), presmooth = presmooth, presmooth.opts = presmooth.opts,
-                              Xrange = Xrange, Qtransform = .(Qtransform),
-                              k =.(k), m =.(m), bs = .(bs))))
+  if(is.null(mparam$family)) mparam$family = gaussian(link = "identity")
+  if(mparam$family$family == "multinom"){
+    # set formula
+    ylevels <- levels(factor(data$y))
+    ynlevels <- nlevels(factor(data$y))
+    
+    ynum <- mapvalues(data$y, from = ylevels, to = (0:(ynlevels-1)))
+    if(is.factor(ynum)) ynum <- as.numeric(levels(ynum))[ynum]
+    if(!is.numeric(ynum)) stop("response of gam.fpco model is not a numeric vector!")
+    
+    
+    # here is a conflict, multinom requires a list as formula, but pfr reject list as formula
+    fm <- list(formula(ynum ~ af(x, basistype = basistype, integration = integration,
+                                L = L, presmooth = presmooth, presmooth.opts = presmooth.opts,
+                                Xrange = Xrange, Qtransform = Qtransform,
+                                k = c(k1, k2), m = m, bs = bs)))
+
+    for ( i in 1:(ynlevels-2)) 
+      fm[[i+1]] <- formula(~ af(x, basistype = basistype, integration = integration,
+                                L = L, presmooth = presmooth, presmooth.opts = presmooth.opts,
+                                Xrange = Xrange, Qtransform = Qtransform,
+                                k = c(k1, k2), m = m, bs = bs))
+    
+    # estimate model
+    mdata.df <- data.frame(ynum = ynum, x = I(data$x))
+    
+    mod <- gam(formula = fm, method = method, family = family, data = mdata.df)
+    
+    # if called for select mstop, return mod 
+    if(select == TRUE) return(mod)
+    
+    # prediction
+    temp <- predict(mod, type = "response")
+    yhat.train <- apply(temp, MARGIN = 1, FUN = function(x) {which(x == max(x)) - 1})
+    yhat.train <- mapvalues(yhat.train, from = (0:(ynlevels-1)), to = ylevels, warn_missing = FALSE)
+    
+    newdata.df <- data.frame(y = newdata$y, x = I(newdata$x))
+    temp2 <- predict(mod, newdata = newdata.df, type = "response")
+    yhat.test <- apply(temp2, MARGIN = 1, FUN = function(x) {which(x == max(x)) - 1}) 
+    yhat.test <- mapvalues(yhat.test, from = (0:(ynlevels-1)), to = ylevels, warn_missing = FALSE)
+  }else { # mparam$family$family != "multinom"
+    # format data
+    data.df <- data.frame(y = data$y, x = I(data$x))
+    if(!is.null(newdata)) {newdata.df <- data.frame(y = newdata$y, x = I(newdata$x))}
   
-  mod <- pfr(formula = fm, 
-             method = if(is.null(mparam$method)) {"GCV.Cp"} else{mparam$method}, 
-             gamma = if(is.null(mparam$gamma)) {1.2} else{mparam$gamma}, 
-             data = data)
-  
-  if(select == TRUE) return(mod)
-  
-  yhat.train <- mod$fitted.values
-  yhat.test <- predict(mod, newdata = newdata)
+    # set formula
+    fm <- formula(bquote(y ~ af(x, basistype = .(basistype), integration = .(integration),
+                                L = .(L), presmooth = presmooth, presmooth.opts = presmooth.opts,
+                                Xrange = Xrange, Qtransform = .(Qtransform),
+                                k = c(k1, k2), m =.(m), bs = .(bs))))
+    # estimate model
+    mod <- pfr(formula = fm, method = method, data = data.df)
+    
+    if(select == TRUE) return(mod)
+    
+    # predict
+    yhat.train <- mod$fitted.values
+    yhat.test <- predict(mod, newdata = newdata.df)
+  }
+  # return items
   return(list(yhat.train = yhat.train, yhat.test = yhat.test))
 }
   

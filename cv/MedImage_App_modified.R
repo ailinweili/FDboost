@@ -24,10 +24,11 @@ require(parallel)
 library(classiFunc, lib.loc = libdir)
 library(foreign, lib.loc = libdir)
 
-# setwd("/Users/WeiliLin/Documents/Statistics/master_thesis/algorithm_code/FDboost_bfpco_github/FDboost/cv")
-# source(file = "library.R")
+#setwd("/Users/WeiliLin/Documents/Statistics/master_thesis/algorithm_code/FDboost_bfpco_github/FDboost/cv")
+#source(file = "library.R")
 source(file = "/zpool1/s11226758/master_thesis/data_application/CodeRes/library.R")
 
+options(expressions = 10000)
 
 doOneSet <- function(useParallel = TRUE, cores = 4, seed = 8323, 
                      data, use.method, cvparam, mparam, ptrain, nfold, splitvclass = FALSE){
@@ -53,9 +54,6 @@ doOneSet <- function(useParallel = TRUE, cores = 4, seed = 8323,
     
     time.stop = proc.time()
     
-    savedir = "/zpool1/s11226758/master_thesis/data_application/CodeRes/results/MedImage"
-    save(temp, file = paste(savedir, "/res_", use.method[i], "_MedImage.RData", sep = ""))
-
     #     res <- cbind(tmp, name=name, rep=i, seed=seed.i, ntrain=ntrain, 
     #                  benchmark.oos = mean((target[-train] - mean(target[train]))^2),
     #                  benchmark.is = mean((target[-train] - mean(target[-train]))^2),
@@ -78,8 +76,8 @@ doOneRep <- function(data, train_index, use.method, cvparam, mparam){
 
 
 # Prepare data #################################################################
-#setwd("/Users/WeiliLin/Documents/Statistics/master_thesis/data_application/MedicalImages")
-#medgf <- read.arff("MedicalImages.arff")
+# setwd("/Users/WeiliLin/Documents/Statistics/master_thesis/data_application/MedicalImages")
+# medgf <- read.arff("MedicalImages.arff")
 
 medgf <- read.arff("/zpool1/s11226758/master_thesis/data_application/data/MedicalImages.arff")
 
@@ -144,6 +142,7 @@ medgf <- read.arff("/zpool1/s11226758/master_thesis/data_application/data/Medica
 set.seed(512)
 exindex <- sample(which(medgf$target == 10), size = 500, replace = FALSE)
 mymedgf <- medgf[-exindex,]
+mymedgf <- medgf[1:200,]
 
 ## reconstruct data
 mydata <- list(y = mymedgf$target, x = as.matrix(mymedgf[,-100]), s = as.numeric(1:99))
@@ -151,35 +150,39 @@ mydata$rspdummy <- factor(levels(mymedgf$target)[levels(mymedgf$target) != 10])
 
 
 # set parameter ##############################################################
-use.method = c("wrap.FDboost.fpco.minkowski", "wrap.FDboost.fpco.elasticMetric",
-               "wrap.FDboost.fpco.correlation", "wrap.FDboost.fpco.dtw",
-               "wrap.FDboost.fpc", "wrap.FDboost.bsignal")
-# "wrap.gam.pfr" is impossible to implement because of the conflict between pfr function and multinom family
+# use.method = c("wrap.FDboost.fpco.minkowski", "wrap.FDboost.fpco.elasticMetric",
+#                "wrap.FDboost.fpco.correlation", #"wrap.FDboost.fpco.dtw",
+#                "wrap.FDboost.fpc", "wrap.FDboost.bsignal")
+# # "wrap.gam.pfr" is impossible to implement because of the conflict between pfr function and multinom family
+# 
+# cvparam <- list(wrap.FDboost.fpco.minkowski = list(distType = "Minkowski", p = c(1,2,5,10), pve = c(0.95, 0.85), add = c(TRUE, FALSE)),
+#                 wrap.FDboost.fpco.elastic = list(distType = "elasticMetric", add = c(TRUE, FALSE), pve = c(0.95, 0.85)),
+#                 wrap.FDboost.fpco.correlation = list(distType = "correlation", pve = c(0.95, 0.85), add = c(TRUE, FALSE)),
+#                 #wrap.FDboost.fpco.dtw = list(distType = "dtw", window.type = c("sakoechiba", "itakura","none"), window.size = c(5,10,20,30)), 
+#                 wrap.FDboost.fpc = list(pve = c(0.95, 0.85)),
+#                 wrap.FDboost.bsignal = list(knots = c(10,20,30), differences = c(1,2))
+#                 # wrap.gam.fpco = list(distType = "Euclidean")
+#                 # wrap.gam.pfr = list(k1 = c(5,5), k2 = c(5,5))
+#                 )
+# 
+# mparam <- list(wrap.FDboost.fpco.minkowski = list(rspformula = "bols(rspdummy, df = 2, contrasts.arg = 'contr.dummy')", family = Multinomial()),
+#                wrap.FDboost.fpco.elastic = list(rspformula = "bols(rspdummy, df = 2, contrasts.arg = 'contr.dummy')", family = Multinomial()),
+#                wrap.FDboost.fpco.correlation = list(rspformula = "bols(rspdummy, df = 2, contrasts.arg = 'contr.dummy')", family = Multinomial()),
+#                #wrap.FDboost.fpco.dtw = list(rspformula = "bols(rspdummy, df = 2, contrasts.arg = 'contr.dummy')", family = Multinomial()),
+#                wrap.FDboost.fpc = list(rspformula = "bols(rspdummy, df = 2, contrasts.arg = 'contr.dummy')", family = Multinomial()),
+#                wrap.FDboost.bsignal = list(rspformula = "bols(rspdummy, df = 2, contrasts.arg = 'contr.dummy')", family = Multinomial())
+#                #wrap.gam.fpco = list(family = multinom(K = 9))
+#                #wrap.gam.pfr = list(family = multinom(K = 9))
+#                )
 
-cvparam <- list(wrap.FDboost.fpco.minkowski = list(distType = "Minkowski", p = c(1,2,5,10), pve = c(0.95, 0.85), add = c(TRUE, FALSE), fastcmd = c(TRUE, FALSE)),
-                wrap.FDboost.fpco.elastic = list(distType = "elasticMetric", add = c(TRUE, FALSE), pve = c(0.95, 0.85), fastcmd = c(TRUE, FALSE)),
-                wrap.FDboost.fpco.correlation = list(distType = "correlation", pve = c(0.95, 0.85), add = c(TRUE, FALSE), fastcmd = c(TRUE, FALSE)),
-                wrap.FDboost.fpco.dtw = list(distType = "dtw", window.type = c("sakoechiba", "itakura","none"), window.size = c(5,10,20,30)), 
-                wrap.FDboost.fpc = list(pve = c(0.95, 0.85)),
-                wrap.FDboost.bsignal = list(knots = c(10,20,30), differences = c(1,2))
-                # wrap.gam.fpco = list(distType = "Euclidean")
-                # wrap.gam.pfr = list(k1 = c(5,5), k2 = c(5,5))
-                )
-
-mparam <- list(wrap.FDboost.fpco.minkowski = list(rspformula = "bols(rspdummy, df = 2, contrasts.arg = 'contr.dummy')", family = Multinomial()),
-               wrap.FDboost.fpco.elastic = list(rspformula = "bols(rspdummy, df = 2, contrasts.arg = 'contr.dummy')", family = Multinomial()),
-               wrap.FDboost.fpco.correlation = list(rspformula = "bols(rspdummy, df = 2, contrasts.arg = 'contr.dummy')", family = Multinomial()),
-               wrap.FDboost.fpco.dtw = list(rspformula = "bols(rspdummy, df = 2, contrasts.arg = 'contr.dummy')", family = Multinomial()),
-               wrap.FDboost.fpc = list(rspformula = "bols(rspdummy, df = 2, contrasts.arg = 'contr.dummy')", family = Multinomial()),
-               wrap.FDboost.bsignal = list(rspformula = "bols(rspdummy, df = 2, contrasts.arg = 'contr.dummy')", family = Multinomial())
-               #wrap.gam.fpco = list(family = multinom(K = 9))
-               #wrap.gam.pfr = list(family = multinom(K = 9))
-               )
+use.method = "wrap.FDboost.fpco.correlation"
+cvparam =  list(wrap.FDboost.fpco.correlation = list(distType = "correlation", pve = c(0.95, 0.85)))
+mparam <- list(wrap.FDboost.fpco.correlation = list(rspformula = "bols(rspdummy, df = 2, contrasts.arg = 'contr.dummy')", family = Multinomial()))
 
 # Estimate model 
 res <- doOneSet(useParallel = TRUE, data = mydata, cores = 10, seed = 100, use.method = use.method, cvparam = cvparam, mparam = mparam, 
                 ptrain = 0.7, nfold = 10, splitvclass = TRUE)
 
 savedir = "/zpool1/s11226758/master_thesis/data_application/CodeRes/results"
-save(res, file = paste(savedir, "/res_MedImage.RData", sep = ""))
+save(res, file = paste(savedir, "/res_MedImage_modified.RData", sep = ""))
 
