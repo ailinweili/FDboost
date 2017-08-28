@@ -463,6 +463,8 @@ X_bsignal <- function(mf, vary, args) {
 #' @param add logical indicates if additive constant of Cailliez(1983) should be 
 #' added to distance matrix in order to realise euclidean representation of the 
 #' distance matrix. Default FALSE. 
+#' @param fastcmd if TRUE, cmdscale_lanczos is applied to decomposite distance matrix, 
+#' if FALSE, cmdscale is used.
 #' @param ... other paramater of distance measure as in \code{\link[proxy]{dist}} for \code{bfpco} base-learner
 #' 
 #' @aliases bconcurrent bhist bfpc bfpco
@@ -2116,6 +2118,7 @@ cmdscale_lanczos_new <- function(d, npc = NULL, pve = 0.95, npc.max = 15,
   if(npc1 < npc) {
     warning(gettextf("only %d of the first %d eigenvalues are > 0", npc1, npc),
             domain = NA)
+    npc <- npc1
   } 
   
   # remove negative evalues
@@ -2155,8 +2158,7 @@ cmdscale_new <- function (d, npc = NULL, pve = 0.95, npc.max = 15, eig = FALSE, 
     if ((n <- nrow(x)) != ncol(x)) 
       stop("distances must be result of 'dist' or a square matrix")
     rn <- rownames(x)
-  }
-  else {
+  }else {
     rn <- attr(d, "Labels")
     x <- matrix(0, n, n)
     if (add) 
@@ -2214,10 +2216,11 @@ cmdscale_new <- function (d, npc = NULL, pve = 0.95, npc.max = 15, eig = FALSE, 
   # rank the ev in decreasing order
   ord <- order(ev, decreasing = TRUE)
   ev <- ev[ord]
+  ev = replace(ev, which(ev <= 0), 0)
   evec <- evec[,ord]
   
   # compute npc 
-  npc <- ifelse(is.null(npc), min(which(cumsum(ev)/sum(ev[ev > 0]) > pve)), npc)
+  npc <- ifelse(is.null(npc), min(which(cumsum(ev)/sum(ev) > pve)), npc)
   if(npc > npc.max)  
     npc <- npc.max
   
@@ -2226,15 +2229,15 @@ cmdscale_new <- function (d, npc = NULL, pve = 0.95, npc.max = 15, eig = FALSE, 
   evec <- as.matrix(evec[,1:npc])
   
   # give warning if negative evalue exists
-  npc1 <- sum(ev > 0)
-  if(npc1 < npc) {
-    warning(gettextf("only %d of the first %d eigenvalues are > 0", npc1, npc),
-            domain = NA)
-  } 
+#   npc1 <- sum(ev > 0)
+#   if(npc1 < npc) {
+#     warning(gettextf("only %d of the first %d eigenvalues are > 0", npc1, npc),
+#             domain = NA)
+#   } 
   
-  # remove negative evalues
-  evec <- evec[, ev > 0, drop = FALSE]
-  ev <- ev[ev > 0]
+#   # remove negative evalues
+#   evec <- evec[, ev > 0, drop = FALSE]
+#   ev <- ev[ev > 0]
   
   # compute points
   points <- evec * rep(sqrt(ev), each=n)

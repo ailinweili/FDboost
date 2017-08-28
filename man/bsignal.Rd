@@ -32,7 +32,8 @@ bfpc(x, s, index = NULL, df = 4, lambda = NULL, penalty = c("identity",
 
 bfpco(x, s, d = NULL, index = NULL, df = 4, lambda = NULL,
   penalty = "identity", pve = 0.95, npc = NULL, npc.max = 15,
-  getEigen = TRUE, add = FALSE, distType = "Euclidean", ...)
+  getEigen = TRUE, add = FALSE, fastcmd = FALSE, distType = "Euclidean",
+  ...)
 }
 \arguments{
 \item{x}{matrix of functional variable x(s). The functional covariate has to be 
@@ -131,6 +132,9 @@ the same distance measure is applied for modelling data and new data.}
 \item{add}{logical indicates if additive constant of Cailliez(1983) should be 
 added to distance matrix in order to realise euclidean representation of the 
 distance matrix. Default FALSE.}
+
+\item{fastcmd}{if TRUE, cmdscale_lanczos is applied to decomposite distance matrix, 
+if FALSE, cmdscale is used.}
 
 \item{distType}{only valid for \code{bfpco} base learner, it refers to type 
 of distance measrue, which is computed among data, the same as the method 
