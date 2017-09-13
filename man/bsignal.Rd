@@ -6,10 +6,6 @@
 \alias{bhist}
 \alias{bfpc}
 \alias{bfpco}
-\alias{bconcurrent}
-\alias{bhist}
-\alias{bfpc}
-\alias{bfpco}
 \title{Base-learners for Functional Covariates}
 \usage{
 bsignal(x, s, index = NULL, inS = c("smooth", "linear", "constant"),
@@ -87,7 +83,7 @@ that all trajectories have the same mean
 \item{penalty}{for \code{bsignal}, by default, \code{penalty = "ps"}, the difference penalty for P-splines is used, 
 for \code{penalty = "pss"} the penalty matrix is transformed to have full rank, 
 so called shrinkage approach by Marra and Wood (2011). 
-For \code{bfpc} the penalty can be either \code{"identity"} for a ridge penalty 
+For \code{bfpc} and \code{bfpco} the penalty can be either \code{"identity"} for a ridge penalty 
 (the default) or \code{"inverse"} to use the matrix with the inverse eigenvalues 
 on the diagonal as penalty matrix or \code{"no"} for no penalty.}
 
@@ -115,14 +111,16 @@ over the functional covariate \eqn{x(s)}}
 \item{inTime}{the historical effect can be smooth, linear or constant in time, 
 which is the index of the functional response y(time).}
 
-\item{pve}{proportion of variance explained by the first K functional principal components (FPCs): 
-used to choose the number of functional principal components (FPCs).}
+\item{pve}{proportion of variance explained by the first K functional principal components (FPCs) or 
+proportion of sum of eigenvalue explained by the first K dimension of functional principal coordinates(FPCos). 
+used to choose the number of functional principal components (FPCs) or the dimension of the principal
+coordinates(FPCos).}
 
-\item{npc}{prespecified value for the number K of FPCs (if given, this overrides \code{pve}).}
+\item{npc}{prespecified value for the number K of FPCs of FPCos(if given, this overrides \code{pve}).}
 
-\item{npc.max}{maximal number K of FPCs to use; defaults to 15.}
+\item{npc.max}{maximal number K of FPCs or maximal dimension of FPCos to use; defaults to 15.}
 
-\item{getEigen}{save the eigenvalues and eigenvectors, defaults to \code{TRUE}.}
+\item{getEigen}{logical indicates wether or not to save the eigenvalues and eigenvectors, default TRUE.}
 
 \item{d}{distance matrix consist of distance between each row of \code{x},
 \code{d} must be computed using the same distance type as \code{distType} 
@@ -130,17 +128,16 @@ and potential distance parameters in \code{...}, so that when function \code{pre
 the same distance measure is applied for modelling data and new data.}
 
 \item{add}{logical indicates if additive constant of Cailliez(1983) should be 
-added to distance matrix in order to realise euclidean representation of the 
-distance matrix. Default FALSE.}
+added to distance matrix for \code{bfpco}. Default FALSE.}
 
-\item{fastcmd}{if TRUE, cmdscale_lanczos is applied to decomposite distance matrix, 
+\item{fastcmd}{if TRUE, cmdscale_lanczos is applied to decomposite distance matrix for \code{bfpco},
 if FALSE, cmdscale is used.}
 
-\item{distType}{only valid for \code{bfpco} base learner, it refers to type 
-of distance measrue, which is computed among data, the same as the method 
-paramter of \code{dist}}
+\item{distType}{character specifies the type of distance measrue to be used to compute distance matrix 
+for \code{bfpco}. See \code{\link[classiFunc]{computeDistMat}} for all availbale distance measures. Further parameters
+of a distance measure should be given in \code{...}.}
 
-\item{...}{other paramater of distance measure as in \code{\link[proxy]{dist}} for \code{bfpco} base-learner}
+\item{...}{additional paramaters of a distance measure to compute distance matrix for \code{bfpco}.}
 }
 \value{
 Equally to the base-learners of package \code{mboost}: 
@@ -154,8 +151,6 @@ The call of \code{dpp()} returns an object of class
 }
 \description{
 Base-learners that fit effects of functional covariates.
-
-FPCO base-learner
 }
 \details{
 \code{bsignal()} implements a base-learner for functional covariates to  

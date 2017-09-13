@@ -431,7 +431,7 @@ X_bsignal <- function(mf, vary, args) {
 #' @param penalty for \code{bsignal}, by default, \code{penalty = "ps"}, the difference penalty for P-splines is used, 
 #' for \code{penalty = "pss"} the penalty matrix is transformed to have full rank, 
 #' so called shrinkage approach by Marra and Wood (2011). 
-#' For \code{bfpc} the penalty can be either \code{"identity"} for a ridge penalty 
+#' For \code{bfpc} and \code{bfpco} the penalty can be either \code{"identity"} for a ridge penalty 
 #' (the default) or \code{"inverse"} to use the matrix with the inverse eigenvalues 
 #' on the diagonal as penalty matrix or \code{"no"} for no penalty. 
 #' @param check.ident use checks for identifiability of the effect, based on Scheipl and Greven (2016) 
@@ -452,20 +452,21 @@ X_bsignal <- function(mf, vary, args) {
 #' function that takes \eqn{s} as the first and \code{t} as the second argument and returns 
 #' \code{TRUE} for combinations of values (s,t) if \eqn{s} falls into the integration range for 
 #' the given \eqn{t}.  
-#' @param pve proportion of variance explained by the first K functional principal components (FPCs): 
-#' used to choose the number of functional principal components (FPCs).
-#' @param npc prespecified value for the number K of FPCs (if given, this overrides \code{pve}).
-#' @param npc.max maximal number K of FPCs to use; defaults to 15. 
-#' @param getEigen save the eigenvalues and eigenvectors, defaults to \code{TRUE}. 
-#' @param distType only valid for \code{bfpco} base learner, it refers to type 
-#' of distance measrue, which is computed among data, the same as the method 
-#' paramter of \code{dist}
+#' @param pve proportion of variance explained by the first K functional principal components (FPCs) or 
+#' proportion of sum of eigenvalue explained by the first K dimension of functional principal coordinates(FPCos). 
+#' used to choose the number of functional principal components (FPCs) or the dimension of the principal
+#' coordinates(FPCos). 
+#' @param npc prespecified value for the number K of FPCs of FPCos(if given, this overrides \code{pve}).
+#' @param npc.max maximal number K of FPCs or maximal dimension of FPCos to use; defaults to 15. 
+#' @param getEigen logical indicates wether or not to save the eigenvalues and eigenvectors, default TRUE. 
+#' @param distType character specifies the type of distance measrue to be used to compute distance matrix 
+#' for \code{bfpco}. See \code{\link[classiFunc]{computeDistMat}} for all availbale distance measures. Further parameters
+#' of a distance measure should be given in \code{...}. 
 #' @param add logical indicates if additive constant of Cailliez(1983) should be 
-#' added to distance matrix in order to realise euclidean representation of the 
-#' distance matrix. Default FALSE. 
-#' @param fastcmd if TRUE, cmdscale_lanczos is applied to decomposite distance matrix, 
+#' added to distance matrix for \code{bfpco}. Default FALSE. 
+#' @param fastcmd if TRUE, cmdscale_lanczos is applied to decomposite distance matrix for \code{bfpco},
 #' if FALSE, cmdscale is used.
-#' @param ... other paramater of distance measure as in \code{\link[proxy]{dist}} for \code{bfpco} base-learner
+#' @param ... additional paramaters of a distance measure to compute distance matrix for \code{bfpco}.
 #' 
 #' @aliases bconcurrent bhist bfpc bfpco
 #' 
@@ -1884,7 +1885,7 @@ X_fpco <- function(mf, vary, args) {
   #  stop("if new data has different length of index, the 'signalIndex' attribution of 'mf' must be explicit given!")
   if(ncol(X1)!=length(xind)) stop(xname, ": Dimension of signal matrix and its index do not match.")
   
-  ## do FPCO on X1 
+  ## do FPCo on X1 
   if(is.null(args$klX)){
     decomppars <- list(argvals = xind, Dist = args$d, distType = args$distType, add = args$add, fastcmd = args$fastcmd,
                        pve = args$pve, npc = args$npc, npc.max = args$npc.max, eig = args$getEigen)
@@ -1909,11 +1910,9 @@ X_fpco <- function(mf, vary, args) {
     ## scores can be computed as \xi_{ik}=\int X1cen_i(s) \phi_k(s) ds
   }else{
     klX <- args$klX
-    # X <- args$klX$points
-    ## compute scores on new X1 observations
+    ## compute FPCo on new X1 observations
     if(ncol(X1) == length(klX$mu) && all(args$s == xind)){
-      # coordinate for the new data inserted into principal coordinate space
-      # refer pco_predict_preprocess of refund package to add additive constant
+      ## compute distanc between new observations and modelling data
       Dist <- do.call(computeDistMat, c(list(x = klX$Y, y = X1, method = args$distType), args$distparams)) # n*nnew
         
       non.diag <- row(Dist) != col(Dist) # 
@@ -1922,20 +1921,21 @@ X_fpco <- function(mf, vary, args) {
       B <- klX$B
       d <- -((Dist^2) -diag(B))  # d = d_(i)^2 - d_(i,new)^2 = b_(ii) - d_(i,new)^2
       
-      # get inverse eigen matrix
+      ## get inverse eigen matrix
       ev <- klX$evalues[1:ncol(klX$points)]
       if(length(ev) == 1){
         lambda.inverse <- as.matrix(1/ev)
       }else{
         lambda.inverse <- as.matrix(diag(1/ev)) }
       
-      # compute new PCOs by equation(10) in Gower(1968)
+      ## compute new PCOs by equation(10) in Gower(1968)
       X <- t(1/2*(lambda.inverse %*% t(klX$points) %*% d)) 
       
       }else{
         #  stop("In bfpco the grid for the functional covariate has to be the same as in the model fit!")
         ## <FIXME> is this linear interpolation of the basis functions correct?
         #  linear interpolation of model data, fit the model data into new signal index 
+        ## Approximate Y at new signal index.
         approxY <- matrix(NA, nrow = nrow(args$klX$Y), ncol = length(xind))
          for (i in 1:nrow(args$klX$Y))    
            approxY[i, ] <- approx(x = args$klX$xind, y = klX$Y[i,], xout = xind)$y
@@ -1985,13 +1985,12 @@ X_fpco <- function(mf, vary, args) {
   )
   
   # X is the pco points or inserted pco points, K is the penalty matrix, 
-  # args expand from args paramter and contain mainly pco analysis results
+  # args expand from args paramter and contain main pco analysis results
   return(list(X = X, K = K, args=args))
 }
 
-### multi-dimensional scaling  (modify cmdscale_lanczos from refund package)
-# insert npc, pve, npc.max parameter, enable select pco by pve.
-#
+### multi-dimensional scaling (modify cmdscale_lanczos from refund package)
+### insert npc, pve, npc.max parameter, enable to select the dimension of FPCo by pve.
 #### comparison of cmdscale_lanczos and cmdscale_lanczos_new
 # library(FDboost)
 # library(dtw)
@@ -2089,12 +2088,8 @@ cmdscale_lanczos_new <- function(d, npc = NULL, pve = 0.95, npc.max = 15,
 #     ev <- ev[ev > 0]
 #   }
   
-  
-  ###### how to insert pve? use k as the dimension of x, use npc.max and pve, npc
-  ###### to select pco
-  # default k1 of slanczos is negative, the order of the evalues associates to k, 
-  # so get the full pco and select by magnitude
-  e <- slanczos(-x/2, k = nrow(x))  
+  ##### eigen-decomposition 
+  e <- slanczos(-x/2, k = nrow(x))   #the order of the evalues relates to k
   ev <- e$values
   evec <- e$vectors
   
@@ -2264,11 +2259,9 @@ cmdscale_new <- function (d, npc = NULL, pve = 0.95, npc.max = 15, eig = FALSE, 
 }
 
 
-### FPCO by smooth centered dissimilarity matrix
+### FPCO by smooth centered data
 fpco.sc <- function(Y = NULL, Y.pred = NULL, Dist = NULL, center = FALSE, random.int = FALSE, nbasis = 10,
                    argvals = NULL, distType = NULL, add = FALSE, npc = NULL, npc.max = NULL, pve = 0.95, eig = TRUE, fastcmd = FALSE, ...) {
-  
-  ## longer computation time due to dist function
   
   if (is.null(Y.pred))
     Y.pred = Y
@@ -2282,7 +2275,6 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, Dist = NULL, center = FALSE, random
   d.vec = rep(argvals, each = I)
   id = rep(1:I, rep(D, I))
 
-  # this part is used for fpca but maybe not for fpco
   if (center) {
     if (random.int) {
       ri_data <- data.frame(y = as.vector(Y), d.vec = d.vec, id = factor(id))
@@ -2298,8 +2290,7 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, Dist = NULL, center = FALSE, random
      mu = rep(0, D)
   }
   
-  # dissimilarity matrix
-  # if single functional is presented
+  # get or compute dissimilarity matrix
   if(is.null(Dist)){
       Dist <- computeDistMat(Y.tilde, method = distType, ...) 
   }
@@ -2307,8 +2298,7 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, Dist = NULL, center = FALSE, random
     if(ncol(Dist) != nrow(Y) | nrow(Dist) != nrow(Y) ) stop("The number of columns/rows of given Dist(distMatrix) is different from the number of rows of data!")
   }
   
-  # modify cmdsclale_lanczos function from refund package
-  # because cmdscale_lanczos does not allow to select pco by pve
+  # modify cmdsclale_lanczos function from refund package to enable slection of FPCo by pve
   if(fastcmd){
     ll <- cmdscale_lanczos_new(d = Dist, npc = npc, npc.max = npc.max, pve = pve, 
                                  eig = eig, add = add, x.ret = TRUE)
@@ -2346,7 +2336,7 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, Dist = NULL, center = FALSE, random
 #   points <- efunctions %*% diag(sqrt(evalues[1:npc]))
 #   colnames(points) <- paste("pco_", 1:ncol(points), sep = "")
 #   
-  # set return item names
+  # prepare return items
   ret.objects = c( "Y", "efunctions", "evalues", "npc", "points", "mu", "argvals",
                    "B", "ac")
   #ret.objects = c("Yhat", "Y", "scores", "mu", "efunctions", "evalues", "npc",
@@ -2357,18 +2347,17 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, Dist = NULL, center = FALSE, random
   #  ret.objects = c(ret.objects, "crit.val")
   #}
   
-  # get return item values
   ret = lapply(1:length(ret.objects), function(u) get(ret.objects[u]))
   names(ret) = ret.objects
   class(ret) = "fpco"
   
-  # return
+  # return object ret
   return(ret)
 }
 
 
 ################################################################################
-#' FPCO base-learner
+## FPCO base-learner
 #' @import dtw
 #' @importFrom classiFunc computeDistMat
 #' @export
@@ -2606,17 +2595,14 @@ bfpco <- function(x, s, d = NULL, index = NULL, df = 4, lambda = NULL, penalty =
   #index <- NULL
   
   ## call X_fpco in oder to compute parameter settings, e.g.
-  ## the basis functions, based on FPCA
+  ## the basis functions, based on FPCoA
   temp <- X_fpco(mf, vary,
                  args = hyper_fpco(mf, d = d, vary = vary, 
                                    df = df, lambda = lambda,
                                    penalty = penalty,
                                    pve = pve, npc = npc, npc.max = npc.max,
                                    s = s, distType = distType, getEigen = getEigen, add = add, fastcmd = fastcmd, ...))
-  
-  # temp is a list of score, penalty matrix, and args
-  ## save the FPCA in args
-  ## str(temp$args)
+
   
   ## return closure object: utilize lexical closures to encapsulate both data and methods.
   ret <- list(model.frame = function()
