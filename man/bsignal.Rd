@@ -6,6 +6,10 @@
 \alias{bhist}
 \alias{bfpc}
 \alias{bfpco}
+\alias{bconcurrent}
+\alias{bhist}
+\alias{bfpc}
+\alias{bfpco}
 \title{Base-learners for Functional Covariates}
 \usage{
 bsignal(x, s, index = NULL, inS = c("smooth", "linear", "constant"),
