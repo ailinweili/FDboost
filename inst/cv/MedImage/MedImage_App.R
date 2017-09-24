@@ -11,7 +11,7 @@ library(foreign)
 rm(list = ls())
 
 # library used on server
-# libdir = "/zpool1/s11226758/master_thesis/data_application"
+# libdir = ""
 # library(stabs, lib.loc = libdir)
 # library(MASS, lib.loc = libdir)
 # library(lattice, lib.loc = libdir)
@@ -113,7 +113,7 @@ cvparam <- list(wrap.FDboost.fpco.minkowski = list(distType = "Minkowski", p = c
                 wrap.FDboost.fpco.dtw = list(distType = "dtw", window.type = c("none"), window.size = c(1), add = c(TRUE, FALSE), pve = c(0.95, 0.85)), 
                 wrap.FDboost.fpc = list(pve = c(0.95, 0.85)),
                 wrap.FDboost.bsignal = list(knots = c(10,20,30), differences = c(1,2)),
-                wrap.gam.fpco = list(distType = "Minkowski", p = c(5), k = c(15), add = c(FALSE)))
+                wrap.gam.fpco = list(distType = "Minkowski", p = c(5), k = c(15), add = c(FALSE))
                 )
 
 mparam <- list(wrap.FDboost.fpco.minkowski = list(rspformula = "bols(rspdummy, df = 2, contrasts.arg = 'contr.dummy')", family = Multinomial()),

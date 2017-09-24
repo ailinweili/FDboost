@@ -36,7 +36,7 @@ rm(list = ls())
 options(expressions = 10000)
 
 # Load functions
-source(file = "/zpool1/s11226758/master_thesis/data_application/CodeRes/library.R")
+source(file = "library.R")
 
 # help functions
 doOneSet <- function(useParallel = TRUE, cores = 4, seed = 8323, 
@@ -94,16 +94,17 @@ mydata$x <- as.matrix(mydata$x)
 use.method = c("wrap.FDboost.fpco.minkowski", "wrap.FDboost.fpco.elasticMetric",
                "wrap.FDboost.fpco.correlation", "wrap.FDboost.fpco.dtw",
                "wrap.FDboost.fpco.dtw","wrap.FDboost.fpco.dtw",
-               "wrap.FDboost.fpc", "wrap.FDboost.bsignal", "wrap.gam.fpco")
+               "wrap.FDboost.fpc", "wrap.FDboost.bsignal", "wrap.gam.pfr", "wrap.gam.fpco")
 
 cvparam <- list(wrap.FDboost.fpco.minkowski = list(distType = "Minkowski", p = c(1,2,5,10), pve = c(0.95,0.85), add = c(TRUE, FALSE)),
                 wrap.FDboost.fpco.elastic = list(distType = "elasticMetric", add = c(TRUE, FALSE), pve = c(0.95,0.85)),
                 wrap.FDboost.fpco.correlation = list(distType = "correlation", pve = c(0.95,0.85), add = c(TRUE, FALSE)),
                 wrap.FDboost.fpco.dtw = list(distType = "dtw", window.type = c("sakoechiba"), window.size = c(5,10,20,30), add = c(TRUE, FALSE), pve = c(0.85,0.95)), 
-                wrap.FDboost.fpco.dtw = list(distType = "dtw", window.type = c("itakura"), window.size = c(5,10,20,30), add = c(TRUE, FALSE), pve = c(0.85,0.95)) 
+                wrap.FDboost.fpco.dtw = list(distType = "dtw", window.type = c("itakura"), window.size = c(5,10,20,30), add = c(TRUE, FALSE), pve = c(0.85,0.95)), 
                 wrap.FDboost.fpco.dtw = list(distType = "dtw", window.type = c("none"), window.size = c(1), add = c(TRUE, FALSE), pve = c(0.85,0.95)), 
                 wrap.FDboost.fpc = list(pve = c(0.95, 0.85)),
                 wrap.FDboost.bsignal = list(knots = c(10,20,30), differences = c(1,2)),
+                wrap.gam.pfr = list(k1 = c(5,10), k2 = c(5,10)),
                 wrap.gam.fpco = list(distType = "Minkowski",  p = c(10), add = c(TRUE), k = c(15))
                 )
 
@@ -115,6 +116,7 @@ mparam <- list(wrap.FDboost.fpco.minkowski = list(family = Binomial()),
                wrap.FDboost.fpco.dtw3 = list(family = Binomial()),
                wrap.FDboost.fpc = list(family = Binomial()),
                wrap.FDboost.bsignal = list(family = Binomial()),
+               wrap.gam.pfr = list(family = binomial()),
                wrap.gam.fpco = list(family = binomial())
 )
 

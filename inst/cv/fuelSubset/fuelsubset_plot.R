@@ -1,16 +1,25 @@
-load("/Users/WeiliLin/Documents/Statistics/master_thesis/algorithm_code/FDboost_bfpco_github/FDboost/cv/res_fuelsubset/res_fuelsubset_singlegam.RData")
+# load library
 library(ggplot2)
 library(reshape2)
 library(gridExtra)
 library(FDboost)
 
+
 # get data
 data("fuelSubset")
 mydata <- list(y = fuelSubset$heatan, x = fuelSubset$NIR, s = fuelSubset$nir.lambda)
-# mydiff.data <- list(y = mydata$y, s = mydata$s[-1])
-# mydiff.data$x <- t(diff(t(mydata$x), 1))
-# mydiff.data$x <- unclass(mydiff.data$x)
-# mydata <- mydiff.data
+
+
+# plot of NIR spectra
+mdf <- melt(t(mydata$x), value.name = "amplitude", varnames = c("wavelength","id"))
+mdf$heatan <- rep(mydata$y, each = dim(mydata$x)[2])
+plot0 <- ggplot(data=mdf, aes(x = wavelength, y = amplitude, group = id, colour = heatan)) +
+  geom_line() +  scale_colour_gradient2(low = "yellow", mid = "green",high = "red")
+
+
+# load prediction values
+load("res_fuelsubset_ex_mod.RData") # res_fuelsubset_ex_mod.RData removes models from res_fuelsubset.RData file
+
 
 # generate training data and validation data
 y.train <- lapply(res$train_index, FUN = function(x) mydata$y[x])
@@ -182,12 +191,3 @@ plot <- ggplot(gpdata, aes(x = method, y = mse)) + geom_boxplot(fill = "lightblu
   stat_summary(fun.y = mean, geom = "point", shape=23, size=4) + labs( x = "")
 
 
-# predicted value plot
-# temp <- list(mse.Minkowski = mse.Minkowski, 
-#             mse.elasticMetric = mse.elasticMetric, mse.correlation = mse.correlation, 
-#             mse.dtw = mse.dtw, mse.fpc = mse.fpc, mse.bsignal = mse.bsignal)
-# mse <- lapply(temp, FUN = function(x) {lapply(1:length(x), FUN = function(i) {
-#   unlist(lapply(1:nfold, FUN = function(j) x[[i]][[j]]$mse.valid))} )}) 
-# mse$mse.intercept <- list(mse.intercept = mse.intercept$mse.test)
-# 
-# lapply(mse, FUN = function(x) lapply(1:length(x), FUN = function(i) mean(x[[i]])))

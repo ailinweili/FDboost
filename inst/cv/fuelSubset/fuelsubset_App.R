@@ -10,7 +10,7 @@ library(refund)
 library(parallel)
 
 # Load library on server
-# libdir = "/zpool1/s11226758/master_thesis/data_application"
+# libdir = ""
 # library(stabs, lib.loc = libdir)
 # library(MASS, lib.loc = libdir)
 # library(lattice, lib.loc = libdir)
@@ -108,7 +108,7 @@ cvparam <- list(wrap.FDboost.fpco.minkowski = list(distType = "Minkowski", p = c
 mparam <- NULL
 
 # Estimate model 
-res <- doOneSet(data = mydata, cores = 20, seed = 508, use.method = use.method, cvparam = cvparam, mparam = mparam, 
+res <- doOneSet(data = mydata, cores = 10, seed = 508, use.method = use.method, cvparam = cvparam, mparam = mparam, 
                 ptrain = 0.7, nfold = 10, splitvclass = FALSE)
 
 # Save results

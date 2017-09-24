@@ -11,7 +11,7 @@ library(refund)
 rm(list = ls())
 
 # Load library on server
-# libdir = "/zpool1/s11226758/master_thesis/data_application"
+# libdir = ""
 # library(stabs, lib.loc = libdir)
 # library(MASS, lib.loc = libdir)
 # library(lattice, lib.loc = libdir)

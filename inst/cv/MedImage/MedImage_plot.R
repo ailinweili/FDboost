@@ -1,22 +1,33 @@
-load("/Users/WeiliLin/Documents/Statistics/master_thesis/algorithm_code/FDboost_bfpco_github/FDboost/cv/res_MedImage/res_MedImage_singlegam.RData")
 library(ggplot2)
 library(reshape2)
 library(gridExtra)
 library(stringr)
 library(foreign)
-library(FDboost)
+
 
 # get data 
-medgf <- read.arff("/Users/WeiliLin/Documents/Statistics/master_thesis/data_application/MedicalImages/MedicalImages.arff")
+medgf <- read.arff("MedicalImages.arff")
 index19 <- which(medgf$target %in% c(1,9))
 set.seed(512)
 index10 <- sample(which(medgf$target == 10), size = 100, replace = FALSE)
 mymedgf <- medgf[c(index19,index10),]
 mymedgf$target <- droplevels(mymedgf$target)
-
-## reconstruct data
+# reconstruct data
 mydata <- list(y = mymedgf$target, x = as.matrix(mymedgf[,-100]), s = as.numeric(1:99))
 mydata$rspdummy <- factor(levels(mymedgf$target)[levels(mymedgf$target) != 10])
+
+
+# plot density of pixel intensity
+colnames(mydata$x) <- 0:98
+mdf <- melt(t(mydata$x), value.name = "density", varnames = c("pixel_intensity","id"))
+mdf$class <- rep(mydata$y, each = dim(mydata$x)[2])
+plot0 <- ggplot(data=mdf, aes(x = pixel_intensity, y = density, group = id, colour = class)) +
+  geom_line(color = "darkblue") + facet_grid(class~.,labeller = label_both) + theme(legend.position="none") + labs(x = "pixel intensity")
+
+
+# load prediction values
+load("res_MedImage_ex_mod.RData") # res_MedImage_ex_mod.RData removes models from res_MedImage.RData
+
 
 # generate training data and validation data
 y.train <- lapply(res$train_index, FUN = function(x) mydata$y[x])
@@ -56,6 +67,7 @@ get_gpdata <- function(msrdata, cvparam, subname = c("p", "pve", "add")){
 
 
 ################compute msr for all models#######################################
+msr.intercept <- unlist(lapply(1:length(y.valid), FUN = function(i) sum(y.valid[[i]] != 1)/length(y.valid[[i]])))
 temp <- lapply(1:(length(res)-1), function(i){compute_msr(predlist = res[[i]]$res[[1]], nfold = 10)})
 names(temp) <- names(res)[1:(length(res)-1)]
 summary_msr <- lapply(temp, FUN = function(x){lapply(x, FUN = function(y) {y = unlist(y); return(c(average = mean(y), quantile = quantile(y, probs = c(0.5)), sd = sd(y)))})})
@@ -164,6 +176,8 @@ plotdata <- t(do.call(cbind, lapply(tp, data.frame, stringsAsFactors=FALSE)))
 rownames(plotdata) <- c("FDb.fpco.mink", "FDb.fpco.ela","FDb.fpco.corr",
                         "FDb.fpco.dtw","FDb.fpc","FDb.bsig","gam.fpco.mink")
 colnames(plotdata) <- paste("msr.cv", 1:nfold, sep = "")
+# add intercept model for comparison
+plotdata = rbind(plotdata, intercept.mod = msr.intercept)
 gpdata <- melt(plotdata, id = subname, value.name = "msr", varnames = c("method", "CVnumber"))
 plot <- ggplot(gpdata, aes(x = method, y = msr)) + geom_boxplot(fill = "lightblue") + 
   stat_summary(fun.y = mean, geom = "point", shape=23, size=4) + labs( x = "")

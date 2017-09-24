@@ -92,7 +92,7 @@ cv.wrap.func <- function(data, train_index, use.method, cvparam, mparam){
 
     
     # case when gam-pfr model is used
-    if(use.method[i] %in% paste("wrap.","gam.", c("pfr"), sep = "")){ # to be checked
+    if(use.method[i] %in% paste("wrap.","gam.", c("pfr"), sep = "")){ 
       res[[i]] <- list()
       mod[[i]] <- list()
       for( j in 1:nrow(cvparam.df[[i]])){
@@ -101,7 +101,7 @@ cv.wrap.func <- function(data, train_index, use.method, cvparam, mparam){
         res[[i]][[j]] <- lapply(1:length(traindata), FUN = function(k) {
           do.call(use.method[i], 
             args = list(data = traindata[[k]], newdata = validdata[[k]], 
-                        cvparam = if(is.data.frame(cvparam.df[[i]][j,])) {as.list(cvparam.df[[i]][j,])} else {as.list(cvparam.df[[i]])}, 
+                        cvparam = cvparam.df[[i]][j,,drop = FALSE], 
                         mparam = mparam[[i]], 
                         select = FALSE))})
         names(res[[i]][[j]]) <- paste("cvdata", 1:length(traindata), sep = "")
@@ -109,8 +109,8 @@ cv.wrap.func <- function(data, train_index, use.method, cvparam, mparam){
         # save models for the first training dataset        
         mod[[i]][[j]]  <- do.call(use.method[i], 
           args = list(data = traindata[[1]], newdata = NULL, 
-                      cvparam = if(is.data.frame(cvparam.df[[i]][j,])) {as.list(cvparam.df[[i]][j,])} else {as.list(cvparam.df[[i]])}, 
-                      mparam = mparam, 
+                      cvparam = cvparam.df[[i]][j,,drop = FALSE], 
+                      mparam = mparam[[i]], 
                       select = TRUE))
       }
       
@@ -571,6 +571,8 @@ wrap.gam.pfr <- function(data, newdata = NULL, cvparam = NULL, mparam = NULL, se
   
   # set formula as a K-1 list if multinom family is given
   if(mparam$family$family == "multinom"){
+    # this does not work because multinomial family requires a list of K-1 formulas, 
+    # each for 1 category, but gam-af does not accept formulas as a list
     
     # convert y into a factor vector of levesl 0,1,...K-1
     ylevels <- levels(factor(data$y))
@@ -611,28 +613,62 @@ wrap.gam.pfr <- function(data, newdata = NULL, cvparam = NULL, mparam = NULL, se
     temp2 <- predict(mod, newdata = newdata.df, type = "response")
     yhat.test <- apply(temp2, MARGIN = 1, FUN = function(x) {which(x == max(x)) - 1}) 
     yhat.test <- mapvalues(yhat.test, from = (0:(ynlevels-1)), to = ylevels, warn_missing = FALSE)
-  }else { # mparam$family$family != "multinom"
+  }else {
+    # binomial model
+    if(mparam$family$family == "binomial"){
+      ylevels <- levels(factor(data$y))
+      ynlevels <- nlevels(factor(data$y))
+      
+      ynum <- mapvalues(data$y, from = ylevels, to = (0:(ynlevels-1)))
+      if(is.factor(ynum)) ynum <- as.numeric(levels(ynum))[ynum]
+      if(!is.numeric(ynum)) stop("response of gam.fpco model is not a numeric vector!")
+      
+      data.list = list(ynum = ynum, x = data$x, s = data$s)
+      
+      fm <- formula(bquote(ynum ~ af(x, argvals = s, basistype = .(basistype), integration = .(integration),
+                                  L = .(L), presmooth = presmooth, presmooth.opts = presmooth.opts,
+                                  Xrange = Xrange, Qtransform = .(Qtransform),
+                                  k = c(k1, k2), m =.(m), bs = .(bs))))
+      
+      # estimate model
+      mod <- pfr(formula = fm, method = method, data = data.list, family = binomial())
+      
+      # return mod if called for select mstop
+      if(select == TRUE) return(mod)
+      
+      # make prediction
+      temp <- as.numeric(predict(mod, type = "response"))
+      yhat.train <- ifelse(temp > 0.5, 1, 0)
+      yhat.train <- mapvalues(yhat.train, from = (0:(ynlevels-1)), to = ylevels, warn_missing = FALSE)
+      
+      newdata$s <- NULL #somehow pfr does not support a new dataset with index s
+      temp2 <- as.numeric(predict(mod, newdata = newdata, type = "response"))
+      yhat.test <- ifelse(temp2 > 0.5, 1, 0)
+      yhat.test <- mapvalues(yhat.test, from = (0:(ynlevels-1)), to = ylevels, warn_missing = FALSE)
+      
+    }else{ #
+      # continious response
     
-    # convert data into a dataframe
-    data.df <- data.frame(y = data$y, x = I(data$x))
-    if(!is.null(newdata)) {newdata.df <- data.frame(y = newdata$y, x = I(newdata$x))}
-  
-    # set formula
-    fm <- formula(bquote(y ~ af(x, basistype = .(basistype), integration = .(integration),
-                                L = .(L), presmooth = presmooth, presmooth.opts = presmooth.opts,
-                                Xrange = Xrange, Qtransform = .(Qtransform),
-                                k = c(k1, k2), m =.(m), bs = .(bs))))
-    # estimate model
-    mod <- pfr(formula = fm, method = method, data = data.df)
+      # convert data into a dataframe
+      data.df <- data.frame(y = data$y, x = I(data$x))
+      if(!is.null(newdata)) {newdata.df <- data.frame(y = newdata$y, x = I(newdata$x))}
     
-    # if called for mstop selection, return mod 
-    if(select == TRUE) return(mod)
-    
-    # make prediction
-    yhat.train <- mod$fitted.values
-    yhat.test <- predict(mod, newdata = newdata.df)
+      # set formula
+      fm <- formula(bquote(y ~ af(x, basistype = .(basistype), integration = .(integration),
+                                  L = .(L), presmooth = presmooth, presmooth.opts = presmooth.opts,
+                                  Xrange = Xrange, Qtransform = .(Qtransform),
+                                  k = c(k1, k2), m =.(m), bs = .(bs))))
+      # estimate model
+      mod <- pfr(formula = fm, method = method, data = data.df)
+      
+      # if called for mstop selection, return mod 
+      if(select == TRUE) return(mod)
+      
+      # make prediction
+      yhat.train <- mod$fitted.values
+      yhat.test <- predict(mod, newdata = newdata.df)
   }
-  
+  } 
   # return predicted value
   return(list(yhat.train = yhat.train, yhat.test = yhat.test))
 }

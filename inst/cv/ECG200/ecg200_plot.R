@@ -1,11 +1,29 @@
-load("/Users/WeiliLin/Documents/Statistics/master_thesis/algorithm_code/FDboost_bfpco_github/FDboost/cv/res_ecg200/res_ecg200_singlegam.RData")
-# load data
-setwd("/Users/WeiliLin/Documents/Statistics/master_thesis/data_application/ECG200")
+# load library
+library(ggplot2)
+library(gridExtra)
+library(reshape2)
+library(foreign)
+library(plyr)
+
+
+# load dataset
 ecg200 <- read.arff("ECG200.arff")
 mydata <- list(y = ecg200$target, x = ecg200[,colnames(ecg200) != "target"], s = 1:96)
-mydata$x <- as.matrix(mydata$x)
 
-# generate training data and validation data
+
+# plot electrical activity records
+names(mydata$x)  <- 0:95
+mdf <- melt(t(mydata$x), value.name = "electrical_activity", varnames = c("time","id"))
+mdf$class <- mapvalues(rep(mydata$y, each = dim(mydata$x)[2]), from = c(-1,1), to = c("abnormal", "normal"))
+plot0 <- ggplot(data=mdf, aes(x = time, y = electrical_activity, group = id, colour = class)) +
+  geom_line(color = "darkblue") + facet_grid(class ~. ) + theme(legend.position="bottom") 
+
+
+# load model prediction values
+load("res_ecg200_ex_mod.RData") # res_ecg200_ex_mod.RData file removes models from res_ecg200.RData file
+
+
+# generate the same training data and validation data as used for cross validation
 y.train <- lapply(res$train_index, FUN = function(x) mydata$y[x])
 y.valid <- lapply(res$train_index, FUN = function(x) {
   valid_index <- setdiff((1:length(mydata$y)),x)
@@ -41,6 +59,7 @@ get_gpdata <- function(msrdata, cvparam, subname = c("p", "pve", "add")){
 
 
 ################compute msr for all models#######################################
+msr.intercept = unlist(lapply(1:nfold, FUN = function(i) sum((y.valid[[i]] != 1)/length(y.valid[[i]]))))
 temp <- lapply(1:(length(res)-1), function(i){compute_msr(predlist = res[[i]]$res[[1]], nfold = 10)})
 names(temp) <- names(res)[1:(length(res)-1)]
 summary_msr <- lapply(temp, FUN = function(x){lapply(x, FUN = function(y) {y = unlist(y); return(c(average = mean(y), quantile = quantile(y, probs = c(0.5)), sd = sd(y)))})})
@@ -54,9 +73,10 @@ msr.dtw.itakura <- temp[[5]]
 msr.dtw.none <- temp[[6]]
 msr.fpc <- temp$wrap.FDboost.fpc
 msr.bsignal <- temp$wrap.FDboost.bsignal
+msr.pfr <- temp$wrap.gam.pfr
 msr.gam <- temp$wrap.gam.fpco
 
-## best model of each methods
+# get the best mse of each method
 best_ave_msr <-lapply(summary_msr, function(x){
   msr_ave = as.data.frame(t(as.data.frame(x)))$average
   best_msr = min(msr_ave)
@@ -64,6 +84,7 @@ best_ave_msr <-lapply(summary_msr, function(x){
   sd = as.data.frame(t(as.data.frame(x)))$sd[index]
   return(c(best_msr = best_msr, index = index, sd = sd) )})
 
+## get the best mse of each method
 best_msr<-lapply(1:(length(res)-1), function(i){temp[[i]][[best_ave_msr[[i]][2]]]}) 
 names(best_msr) <-  names(res)[1:(length(res)-1)]
 best_msr[[5]] <- best_msr[[5]]  <- NULL # the best dtw model remains others are discarded
@@ -71,6 +92,8 @@ best_msr[[5]] <- best_msr[[5]]  <- NULL # the best dtw model remains others are 
 
 ##### print cvparam.new for all models #########################################
 cvparam_all <- lapply(res[1:(length(res)-1)], FUN = function(x) x$cvparam.new)
+
+# get the best hyperparameter combination of each method
 best_cvparam <- lapply(1:length(cvparam_all), FUN = function(i) {
   index = best_ave_msr[[i]][2]
   y = cvparam_all[[i]][[1]][index, , drop = FALSE]
@@ -91,14 +114,14 @@ gpdata.elasticMetric <- get_gpdata(msr.elasticMetric, res$wrap.FDboost.fpco.elas
 plot3 <- ggplot(gpdata.elasticMetric, aes(x = pve, y = msr, fill = add)) + geom_boxplot() + 
   stat_summary(fun.y=mean, geom="point", shape=23, size=4) + 
   scale_fill_brewer(palette="Blues") + ylim(0,0.45) + 
-  ggtitle("FDboost-fpco-elasticMetric") + theme(legend.position="bottom")
+  ggtitle("FDb-fpco-elasticMetric") + theme(legend.position="bottom")
 
 
 gpdata.correlation <- get_gpdata(msr.correlation, res$wrap.FDboost.fpco.correlation$cvparam.new$wrap.FDboost.fpco.correlation, subname = c("pve","add"))
 plot4 <- ggplot(gpdata.correlation, aes(x = pve, y = msr, fill = add)) + geom_boxplot() +
   stat_summary(fun.y=mean, geom="point", shape=23, size=4) + 
   scale_fill_brewer(palette="Blues") + ylim(0,0.45) + 
-  ggtitle("FDboost-fpco-correlation") + theme(legend.position="bottom")
+  ggtitle("FDb-fpco-correlation") + theme(legend.position="bottom")
 
 
 gpdata.dtw.sakoechiba<- get_gpdata(msr.dtw.sakoechiba, res[[4]]$cvparam.new$wrap.FDboost.fpco.dtw, subname = c("window.size","add","pve"))
@@ -135,8 +158,14 @@ plot9 <- ggplot(gpdata.bsignal, aes(x = differences, y = msr, fill = knots)) + g
   scale_fill_brewer(palette="Blues") + ylim(0,0.45) + 
   ggtitle("FDboost-bsignal") + theme(legend.position="bottom")
 
+gpdata.pfr <- get_gpdata(msr.pfr, res$wrap.gam.pfr$cvparam.new$wrap.gam.pfr, subname = c("k1", "k2"))
+plot10 <- ggplot(gpdata.pfr, aes(x = k1 , y = msr, fill = k2)) + geom_boxplot() + 
+  stat_summary(fun.y=mean, geom="point", shape=23, size=4) + 
+  scale_fill_brewer(palette="Blues") + ylim(0,0.45) + 
+  ggtitle("pfr.af") + theme(legend.position="bottom")
+
 gpdata.gam <- get_gpdata(msr.gam, res$wrap.gam.fpco$cvparam.new$wrap.gam.fpco, subname = c("p", "add", "k"))
-plot10 <- ggplot(gpdata.gam, aes(x = k , y = msr, fill = add)) + geom_boxplot() + 
+plot11 <- ggplot(gpdata.gam, aes(x = k , y = msr, fill = add)) + geom_boxplot() + 
   facet_grid( ~ p, labeller = label_both) +
   stat_summary(fun.y=mean, geom="point", shape=23, size=4) + 
   scale_fill_brewer(palette="Blues") + ylim(0,0.45) + 
@@ -146,18 +175,11 @@ plot10 <- ggplot(gpdata.gam, aes(x = k , y = msr, fill = add)) + geom_boxplot() 
 #### plot best model of each methods####################################
 tp <- lapply(1:length(best_msr), FUN = function(i) unlist(best_msr[[i]]))
 plotdata <- t(do.call(cbind, lapply(tp, data.frame, stringsAsFactors=FALSE)))
-rownames(plotdata) <- sapply(names(best_msr), FUN = function(x) substr(x, 6, 30)); colnames(plotdata) <- paste("msr.cv", 1:nfold, sep = "")
-gpdata <- melt(plotdata, id = subname, value.name = "msr", varnames = c("method", "CVnumber"))
-plot <- ggplot(gpdata, aes(x = method, y = msr)) + geom_boxplot(fill = "lightblue") + 
-  stat_summary(fun.y = mean, geom = "point", shape=23, size=4) + labs( x = "")
-
-
-#### plot best model of each methods####################################
-tp <- lapply(1:length(best_msr), FUN = function(i) unlist(best_msr[[i]]))
-plotdata <- t(do.call(cbind, lapply(tp, data.frame, stringsAsFactors=FALSE)))
 rownames(plotdata) <- c("FDb.fpco.mink", "FDb.fpco.ela","FDb.fpco.corr",
-                        "FDb.fpco.dtw","FDb.fpc","FDb.bsig","gam.fpco.mink")
+                        "FDb.fpco.dtw","FDb.fpc","FDb.bsig","gam.fpco.mink","pfr.af")
 colnames(plotdata) <- paste("msr.cv", 1:nfold, sep = "")
+# add intercept model for comparison
+plotdata = rbind(plotdata, intercept.mod = msr.intercept)
 gpdata <- melt(plotdata, id = subname, value.name = "msr", varnames = c("method", "CVnumber"))
 plot <- ggplot(gpdata, aes(x = method, y = msr)) + geom_boxplot(fill = "lightblue") + 
   stat_summary(fun.y = mean, geom = "point", shape=23, size=4) + labs( x = "")

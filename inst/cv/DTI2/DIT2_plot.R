@@ -1,12 +1,31 @@
-load("/Users/WeiliLin/Documents/Statistics/master_thesis/algorithm_code/FDboost_bfpco_github/FDboost/cv/res_DTI2/res_DTI2.RData")
+# load library
+library(refund)
+library(ggplot2)
+library(gridExtra)
+library(reshape2)
 
-data("DTI2")
+# load dataset
+data(DTI2)
 DIT2s <- DTI2[,c("cca", "pasat")]
 DTI2c <- DIT2s[complete.cases(DIT2s),]
 s = as.numeric(1:93)
 mydata = list(x = DTI2c$cca, y = DTI2c$pasat, s = 1:93)
 
-# DIT2 res does not contain train_index
+
+# plot NIR
+mydata$x <- as.data.frame(unclass(mydata$x))
+colnames(mydata$x) = sapply(colnames(mydata$x), FUN = function(x){substr(x, 4, 6)})
+mdf <- melt(t(mydata$x), value.name = "mean_diffusivity", varnames = c("seg","id"))
+mdf$pasat <- rep(mydata$y, each = dim(mydata$x)[2])
+plot0 <- ggplot(data=mdf, aes(x = seg, y = mean_diffusivity, group = id, colour = pasat)) +
+  geom_line() +  scale_colour_gradient2(low = "yellow", mid = "green",high = "red") + labs(y = "mean diffusivity")
+
+
+# load model prediction values
+load("res_DTI2_ex_mod.RData") # res_DTI2_ex_mod.RData file remove the models from res_DTI2.RData file
+
+
+# generate the same training data and validation data as used for cross validation
 y.train <- lapply(res$train_index, FUN = function(x) mydata$y[x])
 y.valid <- lapply(res$train_index, FUN = function(x) {
   valid_index <- setdiff((1:length(mydata$y)),x)
@@ -62,7 +81,7 @@ mse.pfr <- temp$wrap.gam.pfr
 mse.intercept <- temp$intercept.model
 mse.gam <- temp$wrap.gam.fpco
 
-## best model of each methods
+# get the best mse of each method
 best_ave_mse <-lapply(summary_mse, function(x){
   mse_ave = as.data.frame(t(as.data.frame(x)))$average
   best_mse = min(mse_ave)
@@ -77,13 +96,18 @@ best_mse[[5]] <- best_mse[[5]]  <- NULL # the best dtw model reamians others are
 
 ##### print cvparam.new for all models #########################################
 cvparam_all <- lapply(res[1:(length(res)-1)], FUN = function(x) x$cvparam.new)
+
+# get the best hyperparameter combination of each method
 best_cvparam <- lapply(1:length(cvparam_all), FUN = function(i) {
   index = best_ave_mse[[i]][2]
   y = cvparam_all[[i]][[1]][index, , drop = FALSE]
   return(y)
 })
+
 names(best_cvparam) <- names(cvparam_all)
 print(best_cvparam)
+
+
 
 ############## plot for all models ###################################################
 gpdata.intercept <- data.frame(mse = c(mse.train, mse.test), type = rep(c('mse.train','mse.test'), each = length(mse.train)))
@@ -161,7 +185,7 @@ plot11 <- ggplot(gpdata.gam, aes(x = k, y = mse, fill = window.size)) + geom_box
   scale_fill_brewer(palette="Blues") + ylim(0,270) + 
   ggtitle("gam-fpco-dtw(sak)") + theme(legend.position="bottom")
 
-#### plot best model of each methods####################################
+#### plot best model of each methods###########################################
 tp <- lapply(1:length(best_mse), FUN = function(i) unlist(best_mse[[i]]))
 plotdata <- t(do.call(cbind, lapply(tp, data.frame, stringsAsFactors=FALSE)))
 rownames(plotdata) <- c("FDb.fpco.mink", "FDb.fpco.ela","FDb.fpco.corr",
