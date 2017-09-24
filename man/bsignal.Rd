@@ -84,8 +84,8 @@ See the help on the argument \code{center} of \code{\link[mboost]{bbs}}.}
 that all trajectories have the same mean 
 (then a shift in the coefficient function is not identifiable).}
 
-\item{penalty}{for \code{bsignal}, by default, \code{penalty = "ps"}, the difference penalty for P-splines is used, 
-for \code{penalty = "pss"} the penalty matrix is transformed to have full rank, 
+\item{penalty}{for \code{bsignal}, by default, \code{penalty = "ps"}, the difference penalty 
+for P-splines is used, for \code{penalty = "pss"} the penalty matrix is transformed to have full rank, 
 so called shrinkage approach by Marra and Wood (2011). 
 For \code{bfpc} and \code{bfpco} the penalty can be either \code{"identity"} for a ridge penalty 
 (the default) or \code{"inverse"} to use the matrix with the inverse eigenvalues 
@@ -134,8 +134,8 @@ the same distance measure is applied for modelling data and new data.}
 \item{add}{logical indicates if additive constant of Cailliez(1983) should be 
 added to distance matrix for \code{bfpco}. Default FALSE.}
 
-\item{fastcmd}{if TRUE, cmdscale_lanczos is applied to decomposite distance matrix for \code{bfpco},
-if FALSE, cmdscale is used.}
+\item{fastcmd}{if TRUE, cmdscale_lanczos_new is applied to decomposite distance matrix for \code{bfpco},
+if FALSE, cmdscale_new is used.}
 
 \item{distType}{character specifies the type of distance measrue to be used to compute distance matrix 
 for \code{bfpco}. See \code{\link[classiFunc]{computeDistMat}} for all availbale distance measures. Further parameters
@@ -194,6 +194,16 @@ Then \eqn{\beta(s)} is represented in the function
 space spanned by \eqn{\Phi_k(s)}, k=1,...,K, see Scheipl et al. (2015) for details. 
 As penalty matrix, the identity matrix is used. 
 The implementation is similar to \code{\link[refund]{ffpc}}.  
+
+\code{bfpco()} is a base-learner for a linear effect of principal coordinates of functional covariates 
+based on functional principal coordinate analysis(FPCoA). The function decomposes
+distance matrix of a functional covariate and represents the functional covariate by \code{K} 
+principal cooridinates, denoted by \eqn{u_{.1},u_{.2},...,u_{.K}}.The base-learner is namely in form of 
+\eqn{\sum_{k = 1}^{K} u_{k}w_{k}}. When the \code{link[FDboost]{predict.FDboost}} is called, but new data
+are measured on grids different from the measure grids of \code{x}, approximations of the new data
+on the grids of \code{x} will be calculated and used to compute principal coordinates and 
+subsequently prediction for new data. 
+
 
 It is recommended to use centered functional covariates with 
 \eqn{\sum_i x_i(s) = 0} for all \eqn{s} in \code{bsignal()}-, 

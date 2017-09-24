@@ -428,8 +428,8 @@ X_bsignal <- function(mf, vary, args) {
 #' \code{Z} can be calculated as the transformation matrix for a sum-to-zero constraint in the case
 #' that all trajectories have the same mean 
 #' (then a shift in the coefficient function is not identifiable).
-#' @param penalty for \code{bsignal}, by default, \code{penalty = "ps"}, the difference penalty for P-splines is used, 
-#' for \code{penalty = "pss"} the penalty matrix is transformed to have full rank, 
+#' @param penalty for \code{bsignal}, by default, \code{penalty = "ps"}, the difference penalty 
+#' for P-splines is used, for \code{penalty = "pss"} the penalty matrix is transformed to have full rank, 
 #' so called shrinkage approach by Marra and Wood (2011). 
 #' For \code{bfpc} and \code{bfpco} the penalty can be either \code{"identity"} for a ridge penalty 
 #' (the default) or \code{"inverse"} to use the matrix with the inverse eigenvalues 
@@ -464,8 +464,8 @@ X_bsignal <- function(mf, vary, args) {
 #' of a distance measure should be given in \code{...}. 
 #' @param add logical indicates if additive constant of Cailliez(1983) should be 
 #' added to distance matrix for \code{bfpco}. Default FALSE. 
-#' @param fastcmd if TRUE, cmdscale_lanczos is applied to decomposite distance matrix for \code{bfpco},
-#' if FALSE, cmdscale is used.
+#' @param fastcmd if TRUE, cmdscale_lanczos_new is applied to decomposite distance matrix for \code{bfpco},
+#' if FALSE, cmdscale_new is used.
 #' @param ... additional paramaters of a distance measure to compute distance matrix for \code{bfpco}.
 #' 
 #' @aliases bconcurrent bhist bfpc bfpco
@@ -507,6 +507,16 @@ X_bsignal <- function(mf, vary, args) {
 #' space spanned by \eqn{\Phi_k(s)}, k=1,...,K, see Scheipl et al. (2015) for details. 
 #' As penalty matrix, the identity matrix is used. 
 #' The implementation is similar to \code{\link[refund]{ffpc}}.  
+#' 
+#' \code{bfpco()} is a base-learner for a linear effect of principal coordinates of functional covariates 
+#' based on functional principal coordinate analysis(FPCoA). The function decomposes
+#' distance matrix of a functional covariate and represents the functional covariate by \code{K} 
+#' principal cooridinates, denoted by \eqn{u_{.1},u_{.2},...,u_{.K}}.The base-learner is namely in form of 
+#' \eqn{\sum_{k = 1}^{K} u_{k}w_{k}}. When the \code{link[FDboost]{predict.FDboost}} is called, but new data
+#' are measured on grids different from the measure grids of \code{x}, approximations of the new data
+#' on the grids of \code{x} will be calculated and used to compute principal coordinates and 
+#' subsequently prediction for new data. 
+#' 
 #' 
 #' It is recommended to use centered functional covariates with 
 #' \eqn{\sum_i x_i(s) = 0} for all \eqn{s} in \code{bsignal()}-, 
@@ -1950,7 +1960,7 @@ X_fpco <- function(mf, vary, args) {
 
 ### multi-dimensional scaling 
 # Modify cmdscale_lanczos function of refund package, and cmdscale function of stats package.
-# Insert npc, pve, npc.max parameter, enable to select the dimension of FPCo by pve.
+# Insert npc, pve, npc.max parameter, enable the functions to select the dimension of FPCo by pve.
 # cmdscale_lanczos_new uses mgcv::slanczos for eigen-decomposition, while cmdscale_new use 
 # stats::eigen for eigen-decomposition. The former ranks eigenvalue by magnitute, the latter
 # ranks eigenvalue by value.
@@ -2195,7 +2205,7 @@ cmdscale_new <- function (d, npc = NULL, pve = 0.95, npc.max = 15, eig = FALSE, 
 }
 
 
-### FPCO by smooth centered data
+### FPCO by smooth centered data, modify fpco.sa
 fpco.sc <- function(Y = NULL, Y.pred = NULL, Dist = NULL, center = FALSE, random.int = FALSE, nbasis = 10,
                    argvals = NULL, distType = NULL, add = FALSE, npc = NULL, npc.max = NULL, pve = 0.95, eig = TRUE, fastcmd = FALSE, ...) {
   
@@ -2298,7 +2308,6 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, Dist = NULL, center = FALSE, random
 #' @importFrom classiFunc computeDistMat
 #' @export
 #' @rdname bsignal
-
 bfpco <- function(x, s, d = NULL, index = NULL, df = 4, lambda = NULL, penalty = "identity",
                   pve = 0.95, npc = NULL, npc.max = 15, getEigen = TRUE, add = FALSE, fastcmd = FALSE, distType = "Euclidean",
                   ...){
