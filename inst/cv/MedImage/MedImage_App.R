@@ -1,3 +1,4 @@
+# load library
 library(devtools)
 install_git("git://github.com/ailinweili/FDboost.git", branch = "bfpco")
 library(FDboost)

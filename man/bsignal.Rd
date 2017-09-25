@@ -116,17 +116,17 @@ over the functional covariate \eqn{x(s)}}
 which is the index of the functional response y(time).}
 
 \item{pve}{proportion of variance explained by the first K functional principal components (FPCs) or 
-proportion of sum of eigenvalue explained by the first K dimension of functional principal coordinates(FPCos). 
-used to choose the number of functional principal components (FPCs) or the dimension of the principal
+proportion of sum of eigen values explained by the first K dimensions of functional principal coordinates(FPCos). 
+\code{pve} is used to choose the number of functional principal components (FPCs) or the dimension of the principal
 coordinates(FPCos).}
 
-\item{npc}{prespecified value for the number K of FPCs of FPCos(if given, this overrides \code{pve}).}
+\item{npc}{prespecified value for the number K of FPCs or of FPCos(if given, this overrides \code{pve}).}
 
 \item{npc.max}{maximal number K of FPCs or maximal dimension of FPCos to use; defaults to 15.}
 
 \item{getEigen}{logical indicates wether or not to save the eigenvalues and eigenvectors, default TRUE.}
 
-\item{d}{distance matrix consist of distance between each row of \code{x},
+\item{d}{distance matrix consists of distances between each row of \code{x},
 \code{d} must be computed using the same distance type as \code{distType} 
 and potential distance parameters in \code{...}, so that when function \code{predict} is called,
 the same distance measure is applied for modelling data and new data.}
@@ -134,14 +134,15 @@ the same distance measure is applied for modelling data and new data.}
 \item{add}{logical indicates if additive constant of Cailliez(1983) should be 
 added to distance matrix for \code{bfpco}. Default FALSE.}
 
-\item{fastcmd}{if TRUE, cmdscale_lanczos_new is applied to decomposite distance matrix for \code{bfpco},
-if FALSE, cmdscale_new is used.}
+\item{fastcmd}{if TRUE, cmdscale_lanczos_new as a modification of \code{\link[refund]{cmdscale_lanczos}} is applied to decompose distance matrix for \code{bfpco},
+if FALSE, cmdscale_new as a modification of \code{\link[stats]{cmdscale}} is used. By dimension selection of FPCOs, cmdscale_lanczos_new sorts the eigen values
+by magnitude, cmdscale_new sorts the eigen values by value.}
 
 \item{distType}{character specifies the type of distance measrue to be used to compute distance matrix 
 for \code{bfpco}. See \code{\link[classiFunc]{computeDistMat}} for all availbale distance measures. Further parameters
 of a distance measure should be given in \code{...}.}
 
-\item{...}{additional paramaters of a distance measure to compute distance matrix for \code{bfpco}.}
+\item{...}{additional paramaters of a distance measure used to compute distance matrix for \code{bfpco}.}
 }
 \value{
 Equally to the base-learners of package \code{mboost}: 
@@ -202,7 +203,7 @@ principal cooridinates, denoted by \eqn{u_{.1},u_{.2},...,u_{.K}}.The base-learn
 \eqn{\sum_{k = 1}^{K} u_{k}w_{k}}. When the \code{link[FDboost]{predict.FDboost}} is called, but new data
 are measured on grids different from the measure grids of \code{x}, approximations of the new data
 on the grids of \code{x} will be calculated and used to compute principal coordinates and 
-subsequently prediction for new data. 
+subsequently for prediction on new data. 
 
 
 It is recommended to use centered functional covariates with 

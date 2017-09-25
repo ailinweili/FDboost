@@ -393,7 +393,7 @@ X_bsignal <- function(mf, vary, args) {
 #' supplied as n by <no. of evaluations> matrix, i.e., each row is one functional observation. 
 #' @param s vector for the index of the functional variable x(s) giving the 
 #' measurement points of the functional covariate. 
-#' @param d distance matrix consist of distance between each row of \code{x},
+#' @param d distance matrix consists of distances between each row of \code{x},
 #' \code{d} must be computed using the same distance type as \code{distType} 
 #' and potential distance parameters in \code{...}, so that when function \code{predict} is called,
 #' the same distance measure is applied for modelling data and new data. 
@@ -453,10 +453,10 @@ X_bsignal <- function(mf, vary, args) {
 #' \code{TRUE} for combinations of values (s,t) if \eqn{s} falls into the integration range for 
 #' the given \eqn{t}.  
 #' @param pve proportion of variance explained by the first K functional principal components (FPCs) or 
-#' proportion of sum of eigenvalue explained by the first K dimension of functional principal coordinates(FPCos). 
-#' used to choose the number of functional principal components (FPCs) or the dimension of the principal
+#' proportion of sum of eigen values explained by the first K dimensions of functional principal coordinates(FPCos). 
+#' \code{pve} is used to choose the number of functional principal components (FPCs) or the dimension of the principal
 #' coordinates(FPCos). 
-#' @param npc prespecified value for the number K of FPCs of FPCos(if given, this overrides \code{pve}).
+#' @param npc prespecified value for the number K of FPCs or of FPCos(if given, this overrides \code{pve}).
 #' @param npc.max maximal number K of FPCs or maximal dimension of FPCos to use; defaults to 15. 
 #' @param getEigen logical indicates wether or not to save the eigenvalues and eigenvectors, default TRUE. 
 #' @param distType character specifies the type of distance measrue to be used to compute distance matrix 
@@ -464,9 +464,10 @@ X_bsignal <- function(mf, vary, args) {
 #' of a distance measure should be given in \code{...}. 
 #' @param add logical indicates if additive constant of Cailliez(1983) should be 
 #' added to distance matrix for \code{bfpco}. Default FALSE. 
-#' @param fastcmd if TRUE, cmdscale_lanczos_new is applied to decomposite distance matrix for \code{bfpco},
-#' if FALSE, cmdscale_new is used.
-#' @param ... additional paramaters of a distance measure to compute distance matrix for \code{bfpco}.
+#' @param fastcmd if TRUE, cmdscale_lanczos_new as a modification of \code{\link[refund]{cmdscale_lanczos}} is applied to decompose distance matrix for \code{bfpco},
+#' if FALSE, cmdscale_new as a modification of \code{\link[stats]{cmdscale}} is used. By dimension selection of FPCOs, cmdscale_lanczos_new sorts the eigen values
+#' by magnitude, cmdscale_new sorts the eigen values by value. 
+#' @param ... additional paramaters of a distance measure used to compute distance matrix for \code{bfpco}.
 #' 
 #' @aliases bconcurrent bhist bfpc bfpco
 #' 
@@ -515,7 +516,7 @@ X_bsignal <- function(mf, vary, args) {
 #' \eqn{\sum_{k = 1}^{K} u_{k}w_{k}}. When the \code{link[FDboost]{predict.FDboost}} is called, but new data
 #' are measured on grids different from the measure grids of \code{x}, approximations of the new data
 #' on the grids of \code{x} will be calculated and used to compute principal coordinates and 
-#' subsequently prediction for new data. 
+#' subsequently for prediction on new data. 
 #' 
 #' 
 #' It is recommended to use centered functional covariates with 
@@ -1843,16 +1844,15 @@ hyper_fpco <- function(mf, d = NULL, s=NULL, vary, df = 4, lambda = NULL, penalt
 ### model.matrix for FPCo based functional base-learner
 X_fpco <- function(mf, vary, args) {
   
-  stopifnot(is.data.frame(mf))  ## mf is matrix of X
+  stopifnot(is.data.frame(mf))  
   xname <- names(mf)
   X1 <- as.matrix(mf)
-  xind <- attr(mf[[1]], "signalIndex") ## why [[1]] term? mf is a matrix
-  if(is.null(xind)) xind <- args$s # if the attribute is NULL use the s of the model fit
+  xind <- attr(mf[[1]], "signalIndex") 
+  if(is.null(xind)) xind <- args$s 
   
   
-  #if(!is.null(args$klX) && ncol(X1)!=length(xind) && is.null(attr(mf[[1]], "signalIndex")) ) 
-  #  stop("if new data has different length of index, the 'signalIndex' attribution of 'mf' must be explicit given!")
   if(ncol(X1)!=length(xind)) stop(xname, ": Dimension of signal matrix and its index do not match.")
+  
   
   ## do FPCo on X1 
   if(is.null(args$klX)){
@@ -1894,17 +1894,15 @@ X_fpco <- function(mf, vary, args) {
       ev <- klX$evalues[1:ncol(klX$points)]
       if(length(ev) == 1){
         lambda.inverse <- as.matrix(1/ev)
-      }else{
-        lambda.inverse <- as.matrix(diag(1/ev)) }
+        }else{
+          lambda.inverse <- as.matrix(diag(1/ev)) }
       
       ## compute new PCOs by equation(10) in Gower(1968)
       X <- t(1/2*(lambda.inverse %*% t(klX$points) %*% d)) 
       
       }else{
-        #  stop("In bfpco the grid for the functional covariate has to be the same as in the model fit!")
-        ## <FIXME> is this linear interpolation of the basis functions correct?
         #  linear interpolation of model data, fit the model data into new signal index 
-        ## Approximate Y at new signal index.
+        #  Approximate Y at new signal index.
         approxY <- matrix(NA, nrow = nrow(args$klX$Y), ncol = length(xind))
          for (i in 1:nrow(args$klX$Y))    
            approxY[i, ] <- approx(x = args$klX$xind, y = klX$Y[i,], xout = xind)$y
@@ -1926,14 +1924,6 @@ X_fpco <- function(mf, vary, args) {
         # compute new PCOs by equation(10) in Gower(1968)
         X <- t(1/2*(lambda.inverse %*% t(klX$points) %*% d))  
         
-#         approxEfunctions <- matrix(NA, nrow=length(xind), ncol=length(args$subset))
-#         for(i in 1:ncol(klX$efunctions[ , args$subset, drop = FALSE])){
-#            approxEfunctions[,i] <- approx(x=args$klX$xind, y=klX$efunctions[,i], xout=xind)$y
-#        }
-#         approxMu <- approx(x=args$klX$xind, y=klX$mu, xout=xind)$y
-#         X <-(scale(X1, center=approxMu, scale=FALSE) %*% approxEfunctions)
-      ## <FIXME> use integration weights?
-      ##  X <- 1/args$a*(scale(X1, center=approxMu, scale=FALSE) %*% approxEfunctions)
       }
   }
   
@@ -2021,19 +2011,7 @@ cmdscale_lanczos_new <- function(d, npc = NULL, pve = 0.95, npc.max = 15,
     x <- scale(t(scale(t(x), scale=FALSE)),scale=FALSE)
   }
   
-  ###### this is where Dave modified things
-#   e <- slanczos(-x/2, k=k)
-#   ev <- e$values#[seq_len(k)]
-#   evec <- e$vectors#[, seq_len(k), drop = FALSE]
-#   k1 <- sum(ev > 0)
-#   
-#   if(k1 < k) {
-#     warning(gettextf("only %d of the first %d eigenvalues are > 0", k1, k),
-#             domain = NA)
-#     evec <- evec[, ev > 0, drop = FALSE]
-#     ev <- ev[ev > 0]
-#   }
-  
+
   ##### eigen-decomposition 
   e <- slanczos(-x/2, k = nrow(x))   #the order of the evalues relates to k
   ev <- e$values
@@ -2085,12 +2063,7 @@ cmdscale_lanczos_new <- function(d, npc = NULL, pve = 0.95, npc.max = 15,
 cmdscale_new <- function (d, npc = NULL, pve = 0.95, npc.max = 15, eig = FALSE, add = FALSE, x.ret = FALSE) {
   if (anyNA(d)) 
     stop("NA values not allowed in 'd'")
-  #   if (!list.) {
-  #     if (eig) 
-  #       warning("eig=TRUE is disregarded when list.=FALSE")
-  #     if (x.ret) 
-  #       warning("x.ret=TRUE is disregarded when list.=FALSE")
-  #   }
+  
   if (is.null(n <- attr(d, "Size"))) {
     if (add) 
       d <- as.matrix(d)
@@ -2127,29 +2100,16 @@ cmdscale_new <- function (d, npc = NULL, pve = 0.95, npc.max = 15, eig = FALSE, 
     Z <- matrix(0, 2L * n, 2L * n)
     Z[cbind(i2, i)] <- -1
     Z[i, i2] <- -x
-    #Z[i2, i2] <- .Call(C_DoubleCentre, 2 * d)
     Z[i2, i2] <- scale(t(scale(t(2*d), scale=FALSE)),scale=FALSE)
     e <- eigen(Z, symmetric = FALSE, only.values = TRUE)$values
     add.c <- max(Re(e))
     x <- matrix(double(n * n), n, n)
     non.diag <- row(d) != col(d)
     x[non.diag] <- (d[non.diag] + add.c)^2
-    #x <- .Call(C_DoubleCentre, x)
     x <- scale(t(scale(t(x), scale=FALSE)),scale=FALSE)
   }
   
   e <- eigen(-x/2, symmetric = TRUE)
-  #   ev <- e$values[seq_len(k)]
-  #   evec <- e$vectors[, seq_len(k), drop = FALSE]
-  #   k1 <- sum(ev > 0)
-  #   if (k1 < k) {
-  #     warning(gettextf("only %d of the first %d eigenvalues are > 0", 
-  #                      k1, k), domain = NA)
-  #     evec <- evec[, ev > 0, drop = FALSE]
-  #     ev <- ev[ev > 0]
-  #   }
-  #   points <- evec * rep(sqrt(ev), each = n)
-  
   ev <- e$values
   evec <- e$vectors
   
@@ -2169,29 +2129,9 @@ cmdscale_new <- function (d, npc = NULL, pve = 0.95, npc.max = 15, eig = FALSE, 
   ev <- ev[1:npc]  
   evec <- as.matrix(evec[,1:npc])
   
-  # give warning if negative evalue exists
-#   npc1 <- sum(ev > 0)
-#   if(npc1 < npc) {
-#     warning(gettextf("only %d of the first %d eigenvalues are > 0", npc1, npc),
-#             domain = NA)
-#   } 
-  
-#   # remove negative evalues
-#   evec <- evec[, ev > 0, drop = FALSE]
-#   ev <- ev[ev > 0]
-  
   # compute points
   points <- evec * rep(sqrt(ev), each=n)
   dimnames(points) <- list(rn, NULL)
-  
-  #   if (list.) {
-  #     evalus <- e$values
-  #     list(points = points, eig = if (eig) evalus, x = if (x.ret) x, 
-  #          ac = if (add) add.c else 0, GOF = sum(ev)/c(sum(abs(evalus)), 
-  #                                                      sum(pmax(evalus, 0))))
-  #   }
-  #   else points
-  # }
   
   if (eig || x.ret || add) {
     list(points = points, 
@@ -2232,7 +2172,6 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, Dist = NULL, center = FALSE, random
   } else { 
     # do not center
      Y.tilde = Y
-    #Y.tilde = Y - matrix(colMeans(Y, na.rm = TRUE), I, D, byrow = TRUE)
      mu = rep(0, D)
   }
   
@@ -2285,14 +2224,7 @@ fpco.sc <- function(Y = NULL, Y.pred = NULL, Dist = NULL, center = FALSE, random
   # prepare return items
   ret.objects = c( "Y", "efunctions", "evalues", "npc", "points", "mu", "argvals",
                    "B", "ac")
-  #ret.objects = c("Yhat", "Y", "scores", "mu", "efunctions", "evalues", "npc",
-  #              "argvals")
-  #if (var) {
-  #  ret.objects = c(ret.objects, "sigma2", "diag.var", "VarMats")
-  #if (simul)
-  #  ret.objects = c(ret.objects, "crit.val")
-  #}
-  
+
   ret = lapply(1:length(ret.objects), function(u) get(ret.objects[u]))
   names(ret) = ret.objects
   class(ret) = "fpco"
@@ -2322,7 +2254,6 @@ bfpco <- function(x, s, d = NULL, index = NULL, df = 4, lambda = NULL, penalty =
   varnames <- all.vars(cll)
   
   # Reshape mfL so that it is the dataframe of the signal with the index as attribute
-  # is signal necessary?
   xname <- varnames[1]
   indname <- varnames[2]
   if(is.null(colnames(x))) colnames(x) <- paste(xname, 1:ncol(x), sep="_")
@@ -2344,7 +2275,6 @@ bfpco <- function(x, s, d = NULL, index = NULL, df = 4, lambda = NULL, penalty =
             "i.e., base-learners may depend on different",
             " numbers of observations.")
   
-  #index <- NULL
   
   ## call X_fpco in oder to compute parameter settings, e.g.
   ## the basis functions, based on FPCoA
